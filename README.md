@@ -73,35 +73,54 @@ Frontend_v1/
 
 ### 1. Prerequisites
 - **Node.js**: v18.18.0 or higher
-- **npm**: v9.0.0 or higher (or pnpm / yarn)
+- **npm**: v9.0.0 or higher
+- **Backend running**: The FastAPI backend (`backend_v1`) must be running at `http://localhost:8000`
 
-### 2. Installation
+### 2. Clone & Install
+
 ```bash
 git clone <repository-url>
 cd Frontend_v1
 npm install
 ```
 
-### 3. Development Server
+### 3. Configure Environment Variables
+
+Create a `.env.local` file in the `Frontend_v1/` root:
+
+```env
+# URL of the running FastAPI backend
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
+```
+
+### 4. Run the Development Server
+
 ```bash
 npm run dev
 ```
+
 Open [http://localhost:3000](http://localhost:3000) in your browser.
 
-### 4. Production Build & Verification
+### 5. Production Build
+
 ```bash
-# Type check without emitting files
 npm run build
+npm run start
 ```
 
 ---
 
-## 🔑 Demo Credentials
+## 🔑 Test Accounts
 
-For quick local testing and evaluation:
-- **Email**: `employee@dailoqa.com` (or click the quick-fill chip on the login page)
-- **Password**: `password123`
-- **Roles supported**: Faculty / Educator, Department Chair, Academic Dean
+> All accounts below require a **password change on first login** (you'll be redirected automatically).
+
+| Role | Email | Temp Password |
+|------|-------|--------------|
+| **Student** | `student.test@dailoqa.com` | `TempPassword123!` |
+| **Teacher** | `teacher.test@dailoqa.com` | `TempPassword123!` |
+| **Manager** | `manager.test@dailoqa.com` | `TempPassword123!` |
+| **HR** | `hr.test@dailoqa.com` | `TempPassword123!` |
+| **Super Admin** | `superadmin.test@dailoqa.com` | `TempPassword123!` |
 
 ---
 

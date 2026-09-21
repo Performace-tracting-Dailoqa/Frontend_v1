@@ -1,2 +1,2 @@
 # Frontend_v1
-this repositry is for frontend only, we will build it using next js
+This repository contains the complete frontend for the Performance Tracking application, built using Next.js.

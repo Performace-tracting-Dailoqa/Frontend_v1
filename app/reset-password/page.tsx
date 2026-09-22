@@ -16,7 +16,7 @@ import TrueFocus from "@/components/animations/TrueFocus";
 import CountUp from "@/components/animations/CountUp";
 import DotPattern from "@/components/animations/DotPattern";
 import SystemStatusPill from "@/components/animations/SystemStatusPill";
-import { apiChangePassword, apiGetMe, getAuthSession, saveAuthSession, getRoleDashboardPath, AuthError } from "@/utils/auth";
+import { apiChangePassword, clearAuthSession, AuthError } from "@/utils/auth";
 
 function ResetPasswordForm() {
   const router = useRouter();
@@ -52,6 +52,11 @@ function ResetPasswordForm() {
       setPasswordMismatch(true);
       return;
     }
+    if (newPassword.length < 8) {
+      setErrorMessage("Password must be at least 8 characters long.");
+      setShowError(true);
+      return;
+    }
     setPasswordMismatch(false);
     setIsLoading(true);
     setShowError(false);
@@ -60,26 +65,9 @@ function ResetPasswordForm() {
       // 1. Call backend POST /api/v1/auth/change-password
       await apiChangePassword(newPassword, confirmPassword);
 
-      // 2. Refresh session and clear mustChangePassword flag
-      const session = getAuthSession();
-      if (session && session.token) {
-        try {
-          const updatedMe = await apiGetMe(session.token);
-          saveAuthSession({
-            ...session,
-            mustChangePassword: false,
-            user: updatedMe,
-            role: updatedMe.role,
-            profile: updatedMe.profile,
-            scope: updatedMe.scope,
-          });
-        } catch {
-          saveAuthSession({
-            ...session,
-            mustChangePassword: false,
-          });
-        }
-      }
+      // 2. Clear the old session — Supabase rotates the session after a password
+      //    change so the old token is no longer valid. The user must sign in fresh.
+      clearAuthSession();
 
       setState("success");
     } catch (err: unknown) {
@@ -302,17 +290,12 @@ function ResetPasswordForm() {
                 <button
                   type="button"
                   onClick={() => {
-                    const session = getAuthSession();
-                    if (session && session.token && session.user?.role?.name) {
-                      const target = getRoleDashboardPath(session.user.role.name);
-                      router.push(target);
-                    } else {
-                      router.push(`/login?reset=success&email=${encodeURIComponent(email)}`);
-                    }
+                    // Redirect to login — user must sign in with new password to get a fresh token
+                    router.push(`/login?reset=success&email=${encodeURIComponent(email)}`);
                   }}
                   className="w-full py-3 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 active:scale-[0.99] text-white font-medium rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <span>Continue to Dashboard</span>
+                  <span>Sign in with new password</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>

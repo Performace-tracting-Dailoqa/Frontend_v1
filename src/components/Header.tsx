@@ -1,17 +1,37 @@
 "use client";
 
-import React from "react";
+import React, { useEffect, useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useRouter } from "next/navigation";
+import { getAuthSession, apiLogout, UserSession } from "@/utils/auth";
 
 export default function Header({
   onMenuToggle,
 }: {
   onMenuToggle?: () => void;
 }) {
-  const pathname = usePathname();
-  const isTeacherView = pathname === "/dashboard";
-  const isStudentView = pathname === "/student-dashboard";
+  const router = useRouter();
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  useEffect(() => {
+    queueMicrotask(() => {
+      setSession(getAuthSession());
+    });
+  }, []);
+
+  const handleSignOut = async () => {
+    await apiLogout();
+    router.push("/login?logout=true");
+  };
+
+  const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
+  const roleName = session?.user?.role?.name || "Member";
 
   return (
     <header className="h-16 bg-surface-container-lowest border-b border-outline-variant/40 px-4 lg:px-8 flex items-center justify-between sticky top-0 z-30">
@@ -45,26 +65,29 @@ export default function Header({
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface border border-outline-variant/40 transition-colors"
         >
           <span className="material-symbols-outlined text-sm text-primary">lock</span>
-          <span>Auth Flows</span>
+          <span>Switch User</span>
         </Link>
 
-        {/* User Profile Pill & Sign Out */}
-        <Link
-          href="/login"
-          className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-surface-container transition-colors"
+        {/* User Profile Pill & Sign Out Button */}
+        <button
+          onClick={handleSignOut}
+          className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl hover:bg-surface-container transition-colors cursor-pointer text-left"
           title="Click to sign out / return to login"
         >
           <div className="w-8 h-8 rounded-full bg-[#4B2EF5] text-white flex items-center justify-center font-bold text-xs shadow-xs">
-            RS
+            {initials}
           </div>
           <div className="hidden sm:block text-left">
             <p className="text-body-sm font-semibold text-on-surface leading-tight">
-              Dr. Rajesh
+              {displayName}
             </p>
-            <p className="text-[10px] text-outline leading-tight">Sign Out</p>
+            <p className="text-[10px] text-outline leading-tight">
+              {roleName} • Sign Out
+            </p>
           </div>
-        </Link>
+        </button>
       </div>
     </header>
   );
 }
+

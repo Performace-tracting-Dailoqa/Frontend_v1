@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,25 +16,24 @@ import TrueFocus from "@/components/animations/TrueFocus";
 import CountUp from "@/components/animations/CountUp";
 import DotPattern from "@/components/animations/DotPattern";
 import SystemStatusPill from "@/components/animations/SystemStatusPill";
+import { apiChangePassword, apiGetMe, getAuthSession, saveAuthSession, getRoleDashboardPath, AuthError } from "@/utils/auth";
 
 function ResetPasswordForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryEmail = searchParams.get("email") || "employee@dailoqa.com";
   const queryExpired = searchParams.get("expired") === "true";
+  const queryRequired = searchParams.get("required") === "true";
 
-  const [email, setEmail] = useState(queryEmail);
+  const email = queryEmail || "user@dailoqa.com";
   const [newPassword, setNewPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [passwordMismatch, setPasswordMismatch] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [showError, setShowError] = useState(false);
   const [state, setState] = useState<"form" | "expired" | "success">(queryExpired ? "expired" : "form");
-
-  useEffect(() => {
-    if (queryEmail) setEmail(queryEmail);
-    if (queryExpired) setState("expired");
-  }, [queryEmail, queryExpired]);
 
   const getPasswordStrength = () => {
     if (!newPassword) return 0;
@@ -47,7 +46,7 @@ function ResetPasswordForm() {
 
   const strength = getPasswordStrength();
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPassword !== confirmPassword) {
       setPasswordMismatch(true);
@@ -55,11 +54,44 @@ function ResetPasswordForm() {
     }
     setPasswordMismatch(false);
     setIsLoading(true);
+    setShowError(false);
 
-    setTimeout(() => {
-      setIsLoading(false);
+    try {
+      // 1. Call backend POST /api/v1/auth/change-password
+      await apiChangePassword(newPassword, confirmPassword);
+
+      // 2. Refresh session and clear mustChangePassword flag
+      const session = getAuthSession();
+      if (session && session.token) {
+        try {
+          const updatedMe = await apiGetMe(session.token);
+          saveAuthSession({
+            ...session,
+            mustChangePassword: false,
+            user: updatedMe,
+            role: updatedMe.role,
+            profile: updatedMe.profile,
+            scope: updatedMe.scope,
+          });
+        } catch {
+          saveAuthSession({
+            ...session,
+            mustChangePassword: false,
+          });
+        }
+      }
+
       setState("success");
-    }, 600);
+    } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage("Failed to update password. Please check your password meets requirements.");
+      }
+      setShowError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -269,10 +301,18 @@ function ResetPasswordForm() {
                 </p>
                 <button
                   type="button"
-                  onClick={() => router.push(`/login?reset=success&email=${encodeURIComponent(email)}`)}
+                  onClick={() => {
+                    const session = getAuthSession();
+                    if (session && session.token && session.user?.role?.name) {
+                      const target = getRoleDashboardPath(session.user.role.name);
+                      router.push(target);
+                    } else {
+                      router.push(`/login?reset=success&email=${encodeURIComponent(email)}`);
+                    }
+                  }}
                   className="w-full py-3 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 active:scale-[0.99] text-white font-medium rounded-xl shadow-sm transition-all cursor-pointer flex items-center justify-center gap-2"
                 >
-                  <span>Sign In with New Password</span>
+                  <span>Continue to Dashboard</span>
                   <span className="material-symbols-outlined text-sm">arrow_forward</span>
                 </button>
               </div>
@@ -281,6 +321,22 @@ function ResetPasswordForm() {
             {/* FORM STATE */}
             {state === "form" && (
               <div>
+                {/* First-login requirement banner */}
+                {queryRequired && (
+                  <div className="mb-4 p-3.5 rounded-xl bg-amber-50 border border-amber-300 text-amber-900 text-body-sm flex items-center gap-2.5 shadow-2xs">
+                    <span className="material-symbols-outlined text-amber-600 text-lg">lock</span>
+                    <span>First-login security requirement: Please choose a new password.</span>
+                  </div>
+                )}
+
+                {/* Error Banner */}
+                {showError && (
+                  <div className="mb-4 p-4 rounded-xl bg-error-container text-on-error-container text-body-sm flex items-center gap-3 animate-shake">
+                    <span className="material-symbols-outlined text-error text-xl">error</span>
+                    <span>{errorMessage}</span>
+                  </div>
+                )}
+
                 <div className="mb-8 text-center sm:text-left">
                   <h2 className="text-headline-md font-headline font-bold text-on-surface mb-1.5 tracking-tight flex items-center gap-2">
                     <span>Set a new</span>
@@ -293,7 +349,7 @@ function ResetPasswordForm() {
                     />
                   </h2>
                   <p className="text-body-md text-on-surface-variant">
-                    Resetting password for <span className="font-semibold text-on-surface">{email}</span>
+                    Updating password for <span className="font-semibold text-on-surface">{email}</span>
                   </p>
                 </div>
 

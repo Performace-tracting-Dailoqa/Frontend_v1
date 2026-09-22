@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect, Suspense } from "react";
+import React, { useState, Suspense } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -16,7 +16,7 @@ import TrueFocus from "@/components/animations/TrueFocus";
 import CountUp from "@/components/animations/CountUp";
 import DotPattern from "@/components/animations/DotPattern";
 import SystemStatusPill from "@/components/animations/SystemStatusPill";
-import { saveAuthSession } from "@/utils/auth";
+import { apiLogin, apiGetMe, saveAuthSession, getRoleDashboardPath, AuthError } from "@/utils/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -25,47 +25,86 @@ function LoginForm() {
   const emailParam = searchParams.get("email");
   const logoutParam = searchParams.get("logout");
 
-  const [email, setEmail] = useState(emailParam || "employee@dailoqa.com");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState(emailParam || "");
+  const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
   const [showError, setShowError] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("Invalid credentials or insufficient permissions. Please try again.");
   const [successBanner, setSuccessBanner] = useState<string | null>(
     resetParam === "success" ? "Password reset successfully! Please sign in with your new password." : null
   );
 
-  useEffect(() => {
-    if (emailParam) {
-      setEmail(emailParam);
-    }
-  }, [emailParam]);
-
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setShowError(false);
 
-    setTimeout(() => {
-      setIsLoading(false);
-      if (!email.includes("@")) {
-        setErrorMessage("Please enter a valid work email address.");
-        setShowError(true);
+    try {
+      // 1. Authenticate with backend POST /api/v1/auth/login
+      const loginData = await apiLogin(email, password);
+
+      // 2. Handle first-login password change flow
+      if (loginData.must_change_password) {
+        let meData;
+        try {
+          meData = await apiGetMe(loginData.access_token);
+        } catch {
+          meData = {
+            id: loginData.user.id,
+            email: loginData.user.email,
+            name: loginData.user.name,
+            is_active: loginData.user.is_active,
+            must_change_password: true,
+            role: { id: "temp-role", name: loginData.user.role_name || "User" },
+          };
+        }
+        saveAuthSession({
+          token: loginData.access_token,
+          tokenType: loginData.token_type || "bearer",
+          expiresIn: loginData.expires_in,
+          mustChangePassword: true,
+          user: meData,
+          loginAt: new Date().toISOString(),
+        });
+        router.push(`/reset-password?required=true&email=${encodeURIComponent(loginData.user.email)}`);
         return;
       }
-      saveAuthSession(email, "Teacher / Mentor");
-      router.push("/dashboard");
-    }, 600);
+
+      // 3. Normal flow: retrieve authoritative user profile from GET /api/v1/auth/me
+      const meData = await apiGetMe(loginData.access_token);
+
+      saveAuthSession({
+        token: loginData.access_token,
+        tokenType: loginData.token_type || "bearer",
+        expiresIn: loginData.expires_in,
+        mustChangePassword: false,
+        user: meData,
+        role: meData.role,
+        profile: meData.profile,
+        scope: meData.scope,
+        loginAt: new Date().toISOString(),
+      });
+
+      // 4. Role-based routing based strictly on /auth/me
+      const targetDashboard = getRoleDashboardPath(meData.role?.name);
+      router.push(targetDashboard);
+    } catch (err: unknown) {
+      if (err instanceof AuthError) {
+        setErrorMessage(err.message);
+      } else {
+        setErrorMessage("An unexpected error occurred during sign in. Please try again.");
+      }
+      setShowError(true);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSSORedirect = () => {
-    setIsLoading(true);
-    setTimeout(() => {
-      setIsLoading(false);
-      saveAuthSession("employee@dailoqa.com", "Microsoft 365 User");
-      router.push("/dashboard");
-    }, 500);
+    setErrorMessage("Single Sign-On with Microsoft 365 is not supported in this release. Please use your standard credentials.");
+    setShowError(true);
   };
 
   return (
@@ -268,7 +307,7 @@ function LoginForm() {
                     className="w-full pl-11 pr-4 py-3 rounded-xl bg-surface-container border border-outline-variant text-body-md text-on-surface focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all"
                     placeholder="employee@dailoqa.com"
                     required
-                    type="email"
+                    type="text"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                   />

@@ -13,7 +13,7 @@ export default function LandingPage() {
   const [isDark, setIsDark] = useState<boolean>(false);
   const [showStickyPill, setShowStickyPill] = useState<boolean>(false);
 
-  // Monitor scroll for the sticky floating portal access pill (Recommendation 4)
+  // Monitor scroll for the stiky floating portal access pill (Recommendation 4)
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 300) {

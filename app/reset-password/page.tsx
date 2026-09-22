@@ -52,6 +52,11 @@ function ResetPasswordForm() {
       setPasswordMismatch(true);
       return;
     }
+    if (newPassword.length < 8) {
+      setErrorMessage("Password must be at least 8 characters long.");
+      setShowError(true);
+      return;
+    }
     setPasswordMismatch(false);
     setIsLoading(true);
     setShowError(false);

@@ -257,11 +257,24 @@ export async function apiChangePassword(
     let message = "Failed to update password.";
     let code = "PASSWORD_CHANGE_ERROR";
     if (data?.detail) {
-      if (typeof data.detail === "object") {
+      // Pydantic validation errors return detail as an array: [{loc, msg, type}]
+      if (Array.isArray(data.detail) && data.detail.length > 0) {
+        const firstErr = data.detail[0];
+        message = firstErr.msg
+          ? firstErr.msg.replace(/^Value error,?\s*/i, "")
+          : message;
+        code = "VALIDATION_ERROR";
+      } else if (typeof data.detail === "object") {
         message = data.detail.message || message;
         code = data.detail.code || code;
       } else if (typeof data.detail === "string") {
         message = data.detail;
+      }
+    }
+    if (response.status === 422) {
+      // Ensure the message is user-friendly for validation errors
+      if (!message || message === "Failed to update password.") {
+        message = "Password must be at least 8 characters long.";
       }
     }
     throw new AuthError(message, response.status, code);

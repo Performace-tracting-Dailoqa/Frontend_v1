@@ -1,5 +1,7 @@
 "use client";
 
+import { getAuthSession, fetchMe, UserSession } from "@/utils/auth";
+
 import React, { useState } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
@@ -100,6 +102,21 @@ function MetricCard({
 export default function StudentDashboardPage() {
   const [velocityTimeframe, setVelocityTimeframe] = useState<"weekly" | "monthly">("weekly");
   const [actionDone, setActionDone] = useState<Record<string, boolean>>({});
+  const [userName, setUserName] = useState<string>("Student");
+
+  React.useEffect(() => {
+    const s = getAuthSession();
+    if (s && s.user) {
+      const name = s.user.name || s.user.email.split("@")[0];
+      setUserName(name);
+    } else {
+      fetchMe().then((me) => {
+        const name = me.name || me.email.split("@")[0];
+        setUserName(name);
+      }).catch(() => {});
+    }
+  }, []);
+
 
   const weeklyData = [
     { day: "Mon", pct: 72, tasks: 4 },
@@ -144,7 +161,7 @@ export default function StudentDashboardPage() {
           <h1 className="font-headline font-bold text-3xl text-slate-900 mt-0.5 flex items-center gap-2 flex-wrap">
             <span>Good morning,</span>
             <DecryptedText
-              text="Kanishka"
+              text={userName}
               speed={35}
               maxIterations={6}
               sequential={true}

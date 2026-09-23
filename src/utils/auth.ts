@@ -98,8 +98,37 @@ export function clearAuthSession(): void {
 }
 
 export function isUserLoggedIn(): boolean {
+<<<<<<< Updated upstream
   const session = getAuthSession();
   return session !== null && !!session.token;
+=======
+  return getAuthSession() !== null;
+}
+
+/** Starts the Microsoft Entra OIDC login by redirecting to the backend-initiated flow. */
+export function startMicrosoftLogin(): void {
+  if (typeof window === "undefined") return;
+  clearAuthSession();
+  window.location.assign("/api/auth/microsoft");
+}
+
+/** Maps structured Microsoft OAuth error codes from /login?error=<code> to user-facing text. */
+export function getLoginErrorMessage(code?: string | null): string {
+  switch (code) {
+    case "INVALID_STATE":
+      return "The sign-in request could not be verified. Please try signing in again.";
+    case "OAUTH_CANCELLED":
+      return "The Microsoft sign-in was cancelled. No changes were made to your account.";
+    case "NOT_ELIGIBLE":
+      return "This Microsoft account is not eligible to access the PMS portal. Contact your HR administrator.";
+    case "AUTH_SERVICE_UNAVAILABLE":
+      return "Microsoft sign-in is temporarily unavailable. Please try again later or use your credentials.";
+    case "SESSION_CONFIG_ERROR":
+      return "Sign-in is not configured correctly. Please contact your administrator.";
+    default:
+      return "Unable to sign in with Microsoft. Please try again or use your credentials.";
+  }
+>>>>>>> Stashed changes
 }
 
 /**

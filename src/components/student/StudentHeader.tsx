@@ -1,5 +1,7 @@
 "use client";
 
+import { getAuthSession, fetchMe, saveProfileSession, UserSession } from "@/utils/auth";
+
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
@@ -23,6 +25,28 @@ export default function StudentHeader({
 }: StudentHeaderProps) {
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  React.useEffect(() => {
+    const s = getAuthSession();
+    if (s) {
+      setSession(s);
+    } else {
+      fetchMe().then((me) => {
+        saveProfileSession(me);
+        setSession(getAuthSession());
+      }).catch(() => {});
+    }
+  }, []);
+
+  const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
+
 
   const notifications = [
     { id: 1, title: "Mentor Feedback Received", time: "10 mins ago", unread: true, icon: "rate_review" },
@@ -151,8 +175,11 @@ export default function StudentHeader({
 
         {/* User Mini Profile Avatar */}
         <Link href="/student/dashboard" className="flex items-center gap-2 pl-2">
-          <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs shadow-xs">
-            KS
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs shadow-xs" title={displayName}>
+              {initials}
+            </div>
+            <span className="hidden md:inline-block text-xs font-semibold text-slate-800">{displayName}</span>
           </div>
         </Link>
       </div>

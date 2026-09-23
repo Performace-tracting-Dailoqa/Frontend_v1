@@ -3,7 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 
-export default function DashboardStudentRedirect() {
+export default function StudentRootPage() {
   const router = useRouter();
 
   useEffect(() => {
@@ -14,7 +14,7 @@ export default function DashboardStudentRedirect() {
     <div className="flex items-center justify-center min-h-[60vh]">
       <div className="flex flex-col items-center gap-3">
         <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-        <span className="text-body-sm text-on-surface-variant font-medium">Redirecting to Student Dashboard...</span>
+        <span className="text-body-sm text-on-surface-variant font-medium">Loading Student Portal...</span>
       </div>
     </div>
   );

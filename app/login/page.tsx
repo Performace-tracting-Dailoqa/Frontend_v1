@@ -219,16 +219,14 @@ function LoginForm() {
           transition={{ duration: 0.5 }}
           className="mb-6 flex flex-col items-center z-10"
         >
-          <div className="p-2 transition-transform duration-300 hover:scale-105">
-            <Image
-              alt="Dailoqa"
-              src="/dailoqa_logo.png"
-              width={190}
-              height={50}
-              className="h-11 w-auto object-contain drop-shadow-xs"
-              priority
-            />
-          </div>
+          <Image
+            alt="Dailoqa"
+            src="/dailoqa_logo.png"
+            width={190}
+            height={50}
+            className="h-11 w-auto object-contain m-0 p-0 transition-transform duration-300 hover:scale-105"
+            priority
+          />
         </motion.div>
 
         {/* Main Login Card */}

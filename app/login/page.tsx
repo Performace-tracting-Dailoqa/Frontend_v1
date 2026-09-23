@@ -16,7 +16,7 @@ import TrueFocus from "@/components/animations/TrueFocus";
 import CountUp from "@/components/animations/CountUp";
 import DotPattern from "@/components/animations/DotPattern";
 import SystemStatusPill from "@/components/animations/SystemStatusPill";
-import { apiLogin, apiGetMe, saveAuthSession, getRoleDashboardPath, AuthError } from "@/utils/auth";
+import { apiLogin, apiGetMe, fetchMe, saveProfileSession, saveAuthSession, getRoleDashboardPath, getLoginErrorMessage, startMicrosoftLogin, AuthError } from "@/utils/auth";
 
 function LoginForm() {
   const router = useRouter();
@@ -24,14 +24,17 @@ function LoginForm() {
   const resetParam = searchParams.get("reset");
   const emailParam = searchParams.get("email");
   const logoutParam = searchParams.get("logout");
+  const ssoErrorParam = searchParams.get("error");
 
   const [email, setEmail] = useState(emailParam || "");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState("");
-  const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState(
+    ssoErrorParam ? getLoginErrorMessage(ssoErrorParam) : ""
+  );
+  const [showError, setShowError] = useState(Boolean(ssoErrorParam));
   const [successBanner, setSuccessBanner] = useState<string | null>(
     resetParam === "success" ? "Password reset successfully! Please sign in with your new password." : null
   );
@@ -72,20 +75,12 @@ function LoginForm() {
         return;
       }
 
-      // 3. Normal flow: retrieve authoritative user profile from GET /api/v1/auth/me
-      const meData = await apiGetMe(loginData.access_token);
+      // 3. Normal flow: the backend set the HttpOnly pms_session cookie on login.
+      //    Retrieve the authoritative profile via cookie-authenticated /auth/me
+      //    and store ONLY profile metadata — no token in localStorage.
+      const meData = await fetchMe();
 
-      saveAuthSession({
-        token: loginData.access_token,
-        tokenType: loginData.token_type || "bearer",
-        expiresIn: loginData.expires_in,
-        mustChangePassword: false,
-        user: meData,
-        role: meData.role,
-        profile: meData.profile,
-        scope: meData.scope,
-        loginAt: new Date().toISOString(),
-      });
+      saveProfileSession(meData);
 
       // 4. Role-based routing based strictly on /auth/me
       const targetDashboard = getRoleDashboardPath(meData.role?.name);
@@ -103,8 +98,8 @@ function LoginForm() {
   };
 
   const handleSSORedirect = () => {
-    setErrorMessage("Single Sign-On with Microsoft 365 is not supported in this release. Please use your standard credentials.");
-    setShowError(true);
+    setShowError(false);
+    startMicrosoftLogin();
   };
 
   return (

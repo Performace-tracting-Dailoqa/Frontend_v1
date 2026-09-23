@@ -106,13 +106,13 @@ export function isUserLoggedIn(): boolean {
  * Maps backend role name from /auth/me to appropriate dashboard route.
  */
 export function getRoleDashboardPath(roleName?: string | null): string {
-  if (!roleName) return "/dashboard/student";
+  if (!roleName) return "/student/dashboard";
   const normalized = roleName.trim().toLowerCase();
-  if (normalized.includes("student") || normalized.includes("employee")) {
-    return "/dashboard/student";
+  if (normalized.includes("student") || normalized.includes("employee") || normalized.includes("trainee")) {
+    return "/student/dashboard";
   }
   if (normalized.includes("teacher") || normalized.includes("mentor")) {
-    return "/dashboard/teacher";
+    return "/dashboard";
   }
   if (normalized.includes("manager")) {
     return "/dashboard/manager";
@@ -123,7 +123,7 @@ export function getRoleDashboardPath(roleName?: string | null): string {
   if (normalized.includes("admin")) {
     return "/dashboard/super-admin";
   }
-  return "/dashboard/student";
+  return "/student/dashboard";
 }
 
 export class AuthError extends Error {

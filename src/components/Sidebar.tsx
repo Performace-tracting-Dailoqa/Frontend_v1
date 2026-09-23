@@ -119,9 +119,13 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
 export default function Sidebar({
   isOpen,
   onClose,
+  isCollapsed = false,
+  onToggleCollapse,
 }: {
   isOpen?: boolean;
   onClose?: () => void;
+  isCollapsed?: boolean;
+  onToggleCollapse?: () => void;
 }) {
   const pathname = usePathname();
   const router = useRouter();
@@ -146,7 +150,7 @@ export default function Sidebar({
     .join("")
     .toUpperCase() || "U";
   const roleName = session?.user?.role?.name || "Member";
-  const departmentOrEmail = session?.user?.profile?.department || session?.user?.email || "Dailoqa PMS";
+  const subtitle = session?.user?.email || session?.user?.profile?.department || "Dailoqa PMS";
 
   const navSections = getRoleNavSections(session?.user?.role?.name);
 
@@ -161,31 +165,35 @@ export default function Sidebar({
       )}
 
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 bg-surface-container border-r border-outline-variant/50 flex flex-col justify-between transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 ${
+          isCollapsed ? "w-72 lg:w-20" : "w-72"
+        } bg-white border-r border-slate-200/80 flex flex-col justify-between transition-all duration-300 lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
         } lg:static lg:z-auto`}
       >
         {/* Top Header / Branding */}
-        <div className="p-5 pb-3 flex items-center justify-between border-b border-outline-variant/30">
-          <Link href="/dashboard" className="flex items-center gap-3">
-            <div className="bg-white px-2.5 py-1 rounded-lg flex items-center justify-center shadow-xs border border-outline-variant/40">
-              <Image
-                alt="Dailoqa"
-                src="/dailoqa_logo.png"
-                width={80}
-                height={22}
-                className="h-5 w-auto object-contain"
-              />
-            </div>
-            <div className="flex flex-col">
-              <span className="font-headline font-bold text-on-surface text-base tracking-tight leading-none">
-                Dailoqa
-              </span>
-              <span className="text-[11px] font-medium text-outline uppercase tracking-wider mt-0.5">
-                PMS Platform
-              </span>
-            </div>
+        <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : "justify-between"} border-b border-slate-200/80`}>
+          <Link href="/dashboard" className="flex items-center gap-2.5">
+            <Image
+              alt="Dailoqa"
+              src="/dailoqa_logo.png"
+              width={100}
+              height={26}
+              className="h-6 w-auto object-contain m-0 p-0"
+            />
+            {!isCollapsed && (
+              <div className="flex flex-col">
+                <span className="font-headline font-bold text-on-surface text-base tracking-tight leading-none">
+                  Dailoqa
+                </span>
+                <span className="text-[10px] font-semibold text-slate-400 uppercase tracking-wider mt-0.5">
+                  PMS Platform
+                </span>
+              </div>
+            )}
           </Link>
+
+
 
           {onClose && (
             <button
@@ -199,72 +207,88 @@ export default function Sidebar({
         </div>
 
         {/* Current Active Role Badge */}
-        <div className="px-5 pt-3">
-          <div className="bg-surface-container-high/70 p-3 rounded-xl border border-outline-variant/40 flex items-center gap-3">
-            <div className="w-9 h-9 rounded-lg bg-[#4B2EF5] text-white flex items-center justify-center font-bold text-sm shadow-xs">
-              {initials}
-            </div>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-center justify-between">
-                <p className="text-body-sm font-semibold text-on-surface truncate">
-                  {displayName}
+        {!isCollapsed && (
+          <div className="px-4 pt-3">
+            <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200/80 flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-lg bg-[#4B2EF5] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0">
+                {initials}
+              </div>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold text-on-surface truncate">
+                    {displayName}
+                  </p>
+                  <span className="text-[9px] px-1.5 py-0.5 rounded bg-indigo-50 text-indigo-700 font-bold">
+                    {roleName}
+                  </span>
+                </div>
+                <p className="text-[10px] text-slate-500 truncate">
+                  {departmentOrEmail}
                 </p>
-                <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary-fixed text-on-primary-fixed font-medium">
-                  {roleName}
-                </span>
               </div>
               <p className="text-body-sm text-on-surface-variant text-[11px] truncate">
-                {departmentOrEmail}
+                {subtitle}
               </p>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Navigation Section */}
-        <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-5">
+        <nav className={`flex-1 overflow-y-auto ${isCollapsed ? "px-2" : "px-3.5"} py-3 space-y-4`}>
           {navSections.map((section, idx) => (
             <div key={idx} className="space-y-1">
-              {section.title && (
-                <p className="px-3 text-[11px] font-semibold text-outline uppercase tracking-wider mb-2">
+              {section.title && !isCollapsed && (
+                <p className="px-3 text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1.5">
                   {section.title}
                 </p>
               )}
               {section.items.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
                 return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={onClose}
-                    className={`group flex items-center justify-between px-3 py-2.5 rounded-xl text-body-md transition-all ${
-                      isActive
-                        ? "bg-[#4B2EF5] text-white font-medium shadow-xs"
-                        : "text-on-surface-variant hover:bg-surface-container-high hover:text-on-surface"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <span
-                        className={`material-symbols-outlined text-xl transition-transform group-hover:scale-105 ${
-                          isActive ? "text-white" : "text-outline group-hover:text-primary"
-                        }`}
-                      >
-                        {item.icon}
-                      </span>
-                      <span className="truncate">{item.label}</span>
-                    </div>
+                  <div key={item.href} className="relative group">
+                    <Link
+                      href={item.href}
+                      onClick={onClose}
+                      className={`flex items-center ${
+                        isCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 px-3 py-2" : "justify-between px-3 py-2"
+                      } rounded-xl text-sm transition-all ${
+                        isActive
+                          ? "bg-[#4B2EF5] text-white font-medium shadow-xs"
+                          : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
+                      }`}
+                    >
+                      <div className={`flex items-center ${isCollapsed ? "lg:justify-center" : "gap-2.5"}`}>
+                        <span
+                          className={`material-symbols-outlined text-xl ${
+                            isActive ? "text-white" : "text-slate-500 group-hover:text-primary"
+                          }`}
+                        >
+                          {item.icon}
+                        </span>
+                        {!isCollapsed && <span className="truncate">{item.label}</span>}
+                      </div>
 
-                    {item.badge && (
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : "bg-[#e2dfff] text-[#3525cd]"
-                        }`}
-                      >
-                        {item.badge}
-                      </span>
+                      {!isCollapsed && item.badge && (
+                        <span
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
+                            isActive
+                              ? "bg-white/20 text-white"
+                              : "bg-[#e2dfff] text-[#3525cd]"
+                          }`}
+                        >
+                          {item.badge}
+                        </span>
+                      )}
+                    </Link>
+
+                    {/* Tooltip on collapsed */}
+                    {isCollapsed && (
+                      <div className="hidden lg:group-hover:flex absolute left-full ml-3 top-1/2 -translate-y-1/2 z-50 px-3 py-1.5 bg-slate-900 text-white text-xs font-semibold rounded-lg shadow-xl whitespace-nowrap pointer-events-none items-center gap-1.5">
+                        <span>{item.label}</span>
+                        <span className="w-1.5 h-1.5 bg-slate-900 rotate-45 absolute -left-0.5 top-1/2 -translate-y-1/2" />
+                      </div>
                     )}
-                  </Link>
+                  </div>
                 );
               })}
             </div>
@@ -272,13 +296,14 @@ export default function Sidebar({
         </nav>
 
         {/* Bottom User Bar & Sign Out */}
-        <div className="p-4 border-t border-outline-variant/30 bg-surface-container">
+        <div className="p-3 border-t border-slate-200/80 bg-slate-50">
           <button
             onClick={handleSignOut}
-            className="w-full flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-body-md text-error hover:bg-error-container/40 transition-colors font-medium cursor-pointer"
+            className={`w-full flex items-center ${isCollapsed ? "lg:justify-center" : "justify-center gap-2"} px-3 py-2 rounded-xl text-xs text-red-600 hover:bg-red-50 transition-colors font-semibold cursor-pointer`}
+            title="Sign Out"
           >
-            <span className="material-symbols-outlined text-lg">logout</span>
-            <span>Sign Out</span>
+            <span className="material-symbols-outlined text-base">logout</span>
+            {!isCollapsed && <span>Sign Out</span>}
           </button>
         </div>
       </aside>

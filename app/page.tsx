@@ -13,7 +13,7 @@ export default function LandingPage() {
   const [isDark, setIsDark] = useState<boolean>(false);
   const [showStickyPill, setShowStickyPill] = useState<boolean>(false);
 
-  // Monitor scroll for the sticky floating portal access pill (Recommendation 4)
+  // Monitor scroll for the stiky floating portal access pill (Recommendation 4)
   useEffect(() => {
     const handleScroll = () => {
       if (window.scrollY > 300) {
@@ -32,7 +32,7 @@ export default function LandingPage() {
       className={`min-h-screen relative overflow-x-hidden font-sans transition-colors duration-500 select-none ${
         isDark
           ? "bg-[#080811] text-slate-100 selection:bg-[#4B2EF5] selection:text-white"
-          : "bg-[#F8FAFC] text-slate-900 selection:bg-[#4B2EF5] selection:text-white"
+          : "bg-white text-slate-900 selection:bg-[#4B2EF5] selection:text-white"
       }`}
     >
       {/* Interactive Mouse Particle Canvas & Spring-Followed Ambient Light */}
@@ -46,14 +46,14 @@ export default function LandingPage() {
         cy={1.5}
         cr={1}
         className={`pointer-events-none fixed inset-0 z-0 transition-opacity duration-500 ${
-          isDark ? "opacity-20 fill-[#4B2EF5]/20" : "opacity-30 fill-[#4B2EF5]/15"
+          isDark ? "opacity-25 fill-[#4B2EF5]/30" : "opacity-15 fill-slate-400"
         }`}
       />
 
       {/* Soft Ambient Hero Glow Beam */}
       <div
         className={`absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[450px] bg-gradient-to-b from-[#4B2EF5]/15 via-[#7c3aed]/10 to-transparent blur-[150px] pointer-events-none z-0 transition-opacity duration-500 ${
-          isDark ? "opacity-80" : "opacity-40"
+          isDark ? "opacity-80" : "opacity-45"
         }`}
       />
 
@@ -64,27 +64,25 @@ export default function LandingPage() {
         className={`fixed top-0 left-0 right-0 z-50 backdrop-blur-2xl border-b transition-all duration-300 ${
           isDark
             ? "bg-[#080811]/90 border-white/10 shadow-lg shadow-black/30"
-            : "bg-white/90 border-slate-200/80 shadow-xs"
+            : "bg-white border-slate-200/80 shadow-xs"
         }`}
       >
-        <div className="max-w-7xl mx-auto px-6 h-24 sm:h-28 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-6 h-20 sm:h-24 flex items-center justify-between">
           
           {/* Logo Group: MiRai By Dailoqa */}
           <Link href="/" className="flex items-center gap-4 group">
-            {/* Prominent Big MiRai by Dailoqa Logo Badge */}
-            <div className="bg-white px-4 py-2 sm:px-6 sm:py-3 rounded-2xl flex items-center justify-center shadow-md border border-slate-200/90 transition-transform duration-300 group-hover:scale-105">
-              <Image
-                alt="MiRai By Dailoqa Logo"
-                src="/mirai_logo.png"
-                width={320}
-                height={195}
-                className="h-12 sm:h-16 md:h-18 w-auto object-contain"
-                priority
-              />
-            </div>
+            {/* Direct borderless MiRai logo */}
+            <Image
+              alt="MiRai By Dailoqa Logo"
+              src="/mirai_logo.png"
+              width={260}
+              height={140}
+              className="h-10 sm:h-12 w-auto object-contain transition-transform duration-300 group-hover:scale-105 m-0 p-0"
+              priority
+            />
 
             <div className="hidden sm:flex items-center gap-2">
-              <span className="text-xs font-mono font-bold tracking-widest text-[#4B2EF5] px-3 py-1 rounded-lg bg-[#4B2EF5]/10 border border-[#4B2EF5]/20">
+              <span className="text-xs font-mono font-bold tracking-widest text-[#4B2EF5] px-2.5 py-0.5 rounded-lg bg-[#4B2EF5]/10 border border-[#4B2EF5]/20">
                 PMS 2.0
               </span>
             </div>
@@ -130,29 +128,21 @@ export default function LandingPage() {
       {/* ========================================================= */}
       <section className="pt-40 sm:pt-48 pb-16 px-6 max-w-7xl mx-auto text-center relative z-10">
         
-        {/* Center Dailoqa Brand Showcase */}
+        {/* Center Dailoqa Brand Showcase - Completely Borderless & Marginless */}
         <motion.div
-          initial={{ opacity: 0, scale: 0.92, y: 15 }}
+          initial={{ opacity: 0, scale: 0.95, y: 15 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
           transition={{ duration: 0.6 }}
           className="flex justify-center mb-8"
         >
-          <div
-            className={`px-8 sm:px-12 py-4 sm:py-5 rounded-3xl shadow-xl border flex items-center justify-center transition-transform hover:scale-105 duration-300 ${
-              isDark
-                ? "bg-white/5 border-white/10 shadow-black/30"
-                : "bg-white border-slate-200/90 shadow-indigo-500/5"
-            }`}
-          >
-            <Image
-              alt="Dailoqa Logo"
-              src={isDark ? "/dailoqa-logo-white.png" : "/dailoqa_logo.png"}
-              width={400}
-              height={120}
-              className="h-12 sm:h-16 md:h-20 w-auto object-contain"
-              priority
-            />
-          </div>
+          <Image
+            alt="Dailoqa Logo"
+            src={isDark ? "/dailoqa-logo-white.png" : "/dailoqa_logo.png"}
+            width={400}
+            height={120}
+            className="h-14 sm:h-20 md:h-24 w-auto object-contain m-0 p-0 transition-transform hover:scale-105 duration-300"
+            priority
+          />
         </motion.div>
 
         {/* Soft Eyebrow Badge with MiRai identity */}
@@ -252,7 +242,7 @@ export default function LandingPage() {
           className={`rounded-3xl p-10 sm:p-14 text-center border shadow-xl transition-all ${
             isDark
               ? "bg-gradient-to-br from-[#121028] via-[#090915] to-[#0d0d1e] border-white/15 shadow-black/40"
-              : "bg-gradient-to-br from-indigo-50 via-white to-purple-50 border-indigo-200/80 shadow-indigo-100/50"
+              : "bg-white border-slate-200/90 shadow-xs"
           }`}
         >
           <h2
@@ -296,20 +286,18 @@ export default function LandingPage() {
       {/* ========================================================= */}
       <footer
         className={`py-12 border-t transition-colors ${
-          isDark ? "bg-[#05050a] border-white/10" : "bg-slate-50 border-slate-200"
+          isDark ? "bg-[#05050a] border-white/10" : "bg-white border-slate-200/80"
         }`}
       >
         <div className="max-w-7xl mx-auto px-6 flex flex-col sm:flex-row items-center justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="bg-white px-5 py-2.5 rounded-xl shadow-xs border border-slate-200">
-              <Image
-                alt="MiRai By Dailoqa Logo"
-                src="/mirai_logo.png"
-                width={220}
-                height={120}
-                className="h-10 sm:h-12 w-auto object-contain"
-              />
-            </div>
+            <Image
+              alt="MiRai By Dailoqa Logo"
+              src="/mirai_logo.png"
+              width={220}
+              height={120}
+              className="h-10 sm:h-12 w-auto object-contain m-0 p-0"
+            />
             <span className={`text-xs ${isDark ? "text-slate-500" : "text-slate-500"}`}>
               © {new Date().getFullYear()} MiRai by Dailoqa. All rights reserved.
             </span>

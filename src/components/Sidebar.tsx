@@ -150,7 +150,7 @@ export default function Sidebar({
     .join("")
     .toUpperCase() || "U";
   const roleName = session?.user?.role?.name || "Member";
-  const departmentOrEmail = session?.user?.profile?.department || session?.user?.email || "Dailoqa PMS";
+  const subtitle = session?.user?.email || session?.user?.profile?.department || "Dailoqa PMS";
 
   const navSections = getRoleNavSections(session?.user?.role?.name);
 
@@ -226,6 +226,9 @@ export default function Sidebar({
                   {departmentOrEmail}
                 </p>
               </div>
+              <p className="text-body-sm text-on-surface-variant text-[11px] truncate">
+                {subtitle}
+              </p>
             </div>
           </div>
         )}

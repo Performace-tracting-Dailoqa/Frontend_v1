@@ -169,10 +169,7 @@ export default function Sidebar({
     .toUpperCase() || "U";
   const roleName = session?.user?.role?.name || "Member";
   const departmentOrEmail = session?.user?.profile?.department || session?.user?.email || "Dailoqa PMS";
-<<<<<<< Updated upstream
-=======
   const subtitle = departmentOrEmail;
->>>>>>> Stashed changes
 
   const navSections = getRoleNavSections(session?.user?.role?.name);
 

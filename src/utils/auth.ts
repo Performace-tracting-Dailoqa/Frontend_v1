@@ -59,11 +59,13 @@ export interface LoginResponseData {
   };
 }
 
-const STORAGE_KEY = "dailoqa_pms_auth_session";
+const PROFILE_SESSION_KEY = "dailoqa_pms_profile_session";
+const LEGACY_TOKEN_SESSION_KEY = "dailoqa_pms_auth_session";
+
+export const PENDING_ROLE_CODE = "MISSING_ROLE_MAPPING";
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    // In browser context, relative URLs route through Next.js rewrites (zero CORS hurdles)
     return "";
   }
   return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -71,15 +73,23 @@ export function getApiBaseUrl(): string {
 
 export function getAuthToken(): string | null {
   const session = getAuthSession();
-  return session ? session.token : null;
+  return session && session.token ? session.token : null;
 }
 
 export function getAuthSession(): UserSession | null {
   if (typeof window === "undefined") return null;
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    return JSON.parse(raw) as UserSession;
+    const profileRaw = localStorage.getItem(PROFILE_SESSION_KEY);
+    if (profileRaw) {
+      const parsed = JSON.parse(profileRaw) as UserSession;
+      if (parsed && parsed.user) return parsed;
+    }
+    const legacyRaw = localStorage.getItem(LEGACY_TOKEN_SESSION_KEY);
+    if (legacyRaw) {
+      const parsed = JSON.parse(legacyRaw) as UserSession;
+      if (parsed && parsed.user) return parsed;
+    }
+    return null;
   } catch {
     return null;
   }
@@ -87,32 +97,47 @@ export function getAuthSession(): UserSession | null {
 
 export function saveAuthSession(session: UserSession): void {
   if (typeof window !== "undefined") {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(session));
+    if (session.token) {
+      localStorage.setItem(LEGACY_TOKEN_SESSION_KEY, JSON.stringify(session));
+      return;
+    }
+    saveProfileSession(session.user);
   }
+}
+
+export function saveProfileSession(user: UserDetail): void {
+  if (typeof window === "undefined") return;
+  const session: UserSession = {
+    token: "",
+    tokenType: "cookie",
+    expiresIn: null,
+    mustChangePassword: user.must_change_password,
+    user,
+    role: user.role,
+    profile: user.profile || null,
+    scope: user.scope || null,
+    loginAt: new Date().toISOString(),
+  };
+  localStorage.setItem(PROFILE_SESSION_KEY, JSON.stringify(session));
 }
 
 export function clearAuthSession(): void {
   if (typeof window !== "undefined") {
-    localStorage.removeItem(STORAGE_KEY);
+    localStorage.removeItem(PROFILE_SESSION_KEY);
+    localStorage.removeItem(LEGACY_TOKEN_SESSION_KEY);
   }
 }
 
 export function isUserLoggedIn(): boolean {
-<<<<<<< Updated upstream
-  const session = getAuthSession();
-  return session !== null && !!session.token;
-=======
   return getAuthSession() !== null;
 }
 
-/** Starts the Microsoft Entra OIDC login by redirecting to the backend-initiated flow. */
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
   window.location.assign("/api/auth/microsoft");
 }
 
-/** Maps structured Microsoft OAuth error codes from /login?error=<code> to user-facing text. */
 export function getLoginErrorMessage(code?: string | null): string {
   switch (code) {
     case "INVALID_STATE":
@@ -128,12 +153,8 @@ export function getLoginErrorMessage(code?: string | null): string {
     default:
       return "Unable to sign in with Microsoft. Please try again or use your credentials.";
   }
->>>>>>> Stashed changes
 }
 
-/**
- * Maps backend role name from /auth/me to appropriate dashboard route.
- */
 export function getRoleDashboardPath(roleName?: string | null): string {
   if (!roleName) return "/student/dashboard";
   const normalized = roleName.trim().toLowerCase();
@@ -167,9 +188,22 @@ export class AuthError extends Error {
   }
 }
 
-/**
- * Executes POST /api/v1/auth/login against backend.
- */
+function extractDetailMessage(data: unknown, fallback: string): { message: string; code?: string } {
+  let message = fallback;
+  let code: string | undefined;
+  const detail = (data as Record<string, unknown>)?.detail;
+  if (detail) {
+    if (typeof detail === "object" && !Array.isArray(detail)) {
+      const obj = detail as { message?: string; code?: string };
+      message = obj.message || message;
+      code = obj.code || code;
+    } else if (typeof detail === "string") {
+      message = detail;
+    }
+  }
+  return { message, code };
+}
+
 export async function apiLogin(identifier: string, password: string): Promise<LoginResponseData> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/login`;
@@ -183,6 +217,7 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
         Accept: "application/json",
       },
       body: JSON.stringify({ identifier: identifier.trim(), password }),
+      credentials: "same-origin",
     });
   } catch {
     throw new AuthError("Unable to connect to authentication service. Please check your network or server.", 502, "NETWORK_ERROR");
@@ -191,26 +226,42 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    let message = "Invalid login credentials provided.";
-    let code = "AUTH_ERROR";
-    if (data?.detail) {
-      if (typeof data.detail === "object") {
-        message = data.detail.message || message;
-        code = data.detail.code || code;
-      } else if (typeof data.detail === "string") {
-        message = data.detail;
-      }
-    }
-    throw new AuthError(message, response.status, code);
+    const { message, code } = extractDetailMessage(data, "Invalid login credentials provided.");
+    throw new AuthError(message, response.status, code || "AUTH_ERROR");
   }
 
   return data as LoginResponseData;
 }
 
-/**
- * Executes GET /api/v1/auth/me against backend.
- */
-export async function apiGetMe(token: string): Promise<UserDetail> {
+export async function fetchMe(): Promise<UserDetail> {
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/v1/auth/me`;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "GET",
+      headers: { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    throw new AuthError("Failed to reach server to retrieve profile.", 502, "NETWORK_ERROR");
+  }
+
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    const { message, code } = extractDetailMessage(data, "Failed to load user profile.");
+    throw new AuthError(message, response.status, code || "PROFILE_ERROR");
+  }
+
+  return data as UserDetail;
+}
+
+export async function apiGetMe(token?: string | null): Promise<UserDetail> {
+  if (!token) {
+    return fetchMe();
+  }
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/me`;
 
@@ -230,47 +281,37 @@ export async function apiGetMe(token: string): Promise<UserDetail> {
   const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    let message = "Failed to load user profile.";
-    let code = "PROFILE_ERROR";
-    if (data?.detail) {
-      if (typeof data.detail === "object") {
-        message = data.detail.message || message;
-        code = data.detail.code || code;
-      } else if (typeof data.detail === "string") {
-        message = data.detail;
-      }
-    }
-    throw new AuthError(message, response.status, code);
+    const { message, code } = extractDetailMessage(data, "Failed to load user profile.");
+    throw new AuthError(message, response.status, code || "PROFILE_ERROR");
   }
 
   return data as UserDetail;
 }
 
-/**
- * Executes POST /api/v1/auth/change-password against backend.
- */
 export async function apiChangePassword(
   newPassword: string,
   confirmPassword?: string,
   tokenOverride?: string
 ): Promise<{ success: boolean; message: string; must_change_password: boolean }> {
   const token = tokenOverride || getAuthToken();
-  if (!token) {
-    throw new AuthError("Authentication token is missing. Please sign in again.", 401, "UNAUTHORIZED");
-  }
 
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/change-password`;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-        Accept: "application/json",
-      },
+      headers,
+      credentials: "same-origin",
       body: JSON.stringify({
         new_password: newPassword,
         confirm_password: confirmPassword || newPassword,
@@ -285,23 +326,21 @@ export async function apiChangePassword(
   if (!response.ok) {
     let message = "Failed to update password.";
     let code = "PASSWORD_CHANGE_ERROR";
-    if (data?.detail) {
-      // Pydantic validation errors return detail as an array: [{loc, msg, type}]
-      if (Array.isArray(data.detail) && data.detail.length > 0) {
-        const firstErr = data.detail[0];
-        message = firstErr.msg
-          ? firstErr.msg.replace(/^Value error,?\s*/i, "")
-          : message;
+    const detail = (data as Record<string, unknown>)?.detail;
+    if (detail) {
+      if (Array.isArray(detail) && detail.length > 0) {
+        const firstErr = detail[0] as { msg?: string };
+        message = firstErr.msg ? firstErr.msg.replace(/^Value error,?\s*/i, "") : message;
         code = "VALIDATION_ERROR";
-      } else if (typeof data.detail === "object") {
-        message = data.detail.message || message;
-        code = data.detail.code || code;
-      } else if (typeof data.detail === "string") {
-        message = data.detail;
+      } else if (typeof detail === "object") {
+        const obj = detail as { message?: string; code?: string };
+        message = obj.message || message;
+        code = obj.code || code;
+      } else if (typeof detail === "string") {
+        message = detail;
       }
     }
     if (response.status === 422) {
-      // Ensure the message is user-friendly for validation errors
       if (!message || message === "Failed to update password.") {
         message = "Password must be at least 8 characters long.";
       }
@@ -312,25 +351,18 @@ export async function apiChangePassword(
   return data;
 }
 
-/**
- * Executes POST /api/v1/auth/logout against backend and clears local session.
- */
 export async function apiLogout(): Promise<void> {
   const token = getAuthToken();
-  if (token) {
-    const baseUrl = getApiBaseUrl();
-    const url = `${baseUrl}/api/v1/auth/logout`;
-    try {
-      await fetch(url, {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${token}`,
-          Accept: "application/json",
-        },
-      });
-    } catch {
-      // Ignore network errors during logout to guarantee client cleanup
-    }
+  const baseUrl = getApiBaseUrl();
+  const url = `${baseUrl}/api/v1/auth/logout`;
+  try {
+    await fetch(url, {
+      method: "POST",
+      headers: token ? { Authorization: `Bearer ${token}`, Accept: "application/json" } : { Accept: "application/json" },
+      credentials: "same-origin",
+    });
+  } catch {
+    // Ignore network errors during logout
   }
   clearAuthSession();
 }

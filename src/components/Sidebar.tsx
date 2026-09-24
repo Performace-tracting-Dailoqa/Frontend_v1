@@ -192,7 +192,7 @@ export default function Sidebar({
       >
         {/* Top Header / Branding */}
         <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : "justify-between"} border-b border-slate-200/80`}>
-          <Link href="/dashboard" className="flex items-center gap-2.5">
+          <Link href="/" onClick={(e) => { e.preventDefault(); router.push("/"); }} className="flex items-center gap-2.5 cursor-pointer z-10">
             <Image
               alt="Dailoqa"
               src="/dailoqa_logo.png"

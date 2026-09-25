@@ -99,6 +99,7 @@ export function saveAuthSession(session: UserSession): void {
   if (typeof window !== "undefined") {
     if (session.token) {
       localStorage.setItem(LEGACY_TOKEN_SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(PROFILE_SESSION_KEY, JSON.stringify(session));
       return;
     }
     saveProfileSession(session.user);
@@ -162,7 +163,7 @@ export function getRoleDashboardPath(roleName?: string | null): string {
     return "/student/dashboard";
   }
   if (normalized.includes("teacher") || normalized.includes("mentor")) {
-    return "/dashboard";
+    return "/dashboard/teacher";
   }
   if (normalized.includes("manager")) {
     return "/dashboard/manager";

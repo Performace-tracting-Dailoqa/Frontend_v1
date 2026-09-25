@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { createBackendUser } from "@/services/adminService";
 
 interface PortalsTabProps {
   onSimulate: (role: string, user: string, org: string) => void;
@@ -347,9 +348,23 @@ export default function PortalsTab({ onSimulate }: PortalsTabProps) {
       sessionHash: `Block #${Math.floor(419830 + Math.random() * 50)}`,
       timestamp: "Just now",
     };
-    setSessions([newLog, ...sessions]);
+    // Call backend API to provision real database record
+    const backendRole = role === "Student" ? "Learner" : role;
+    createBackendUser({
+      name: provName.trim(),
+      email: provEmail.trim().toLowerCase(),
+      role: backendRole as "Learner" | "Teacher" | "HR Manager" | "Manager",
+      department: provOrg || "General",
+      specialization: provDetail || undefined,
+    })
+      .then(() => {
+        showToast(`${role} ${newUser.name} provisioned in database & session launched!`);
+      })
+      .catch((err) => {
+        console.warn("Backend user creation error:", err);
+        showToast(`Provisioned in UI (${err instanceof Error ? err.message : "check server logs"})`);
+      });
 
-    showToast(`${role} ${newUser.name} provisioned & session launched!`);
     setProvisionModalRole(null);
     setProvName("");
     setProvEmail("");

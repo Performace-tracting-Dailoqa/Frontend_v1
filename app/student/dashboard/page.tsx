@@ -1,8 +1,13 @@
 "use client";
 
 import { getAuthSession, fetchMe, UserSession } from "@/utils/auth";
+import {
+  fetchStudentTasks,
+  updateStudentTaskStatus,
+  StudentTaskItem,
+} from "@/services/workflowService";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import CountUp from "@/components/animations/CountUp";
@@ -103,8 +108,24 @@ export default function StudentDashboardPage() {
   const [velocityTimeframe, setVelocityTimeframe] = useState<"weekly" | "monthly">("weekly");
   const [actionDone, setActionDone] = useState<Record<string, boolean>>({});
   const [userName, setUserName] = useState<string>("Student");
+  const [realTasks, setRealTasks] = useState<StudentTaskItem[]>([]);
+  const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
-  React.useEffect(() => {
+  const loadStudentTasks = async () => {
+    try {
+      setIsLoadingTasks(true);
+      const res = await fetchStudentTasks();
+      if (res && res.items) {
+        setRealTasks(res.items);
+      }
+    } catch (err) {
+      console.warn("Failed to load student workflow tasks:", err);
+    } finally {
+      setIsLoadingTasks(false);
+    }
+  };
+
+  useEffect(() => {
     const s = getAuthSession();
     if (s && s.user) {
       const name = s.user.name || s.user.email.split("@")[0];
@@ -115,7 +136,22 @@ export default function StudentDashboardPage() {
         setUserName(name);
       }).catch(() => {});
     }
+    loadStudentTasks();
   }, []);
+
+  const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
+    const nextStatus = currentStatus === "completed" ? "pending" : "completed";
+    setRealTasks((prev) =>
+      prev.map((t) => (t.id === taskId ? { ...t, status: nextStatus } : t))
+    );
+    try {
+      await updateStudentTaskStatus(taskId, nextStatus);
+    } catch (err) {
+      console.warn("Failed to update task status in DB:", err);
+      loadStudentTasks();
+    }
+  };
+
 
 
   const weeklyData = [
@@ -202,59 +238,66 @@ export default function StudentDashboardPage() {
       {/* ========================================================= */}
       {/* 4 CORE KPI METRICS                                       */}
       {/* ========================================================= */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
-        <MetricCard
-          title="Overall Progress"
-          value="86%"
-          numValue={86}
-          suffix="%"
-          badge="+4.2% MoM"
-          badgeType="success"
-          progress={86}
-          icon="trending_up"
-          colorClass="text-indigo-600"
-          bgClass="bg-indigo-50"
-          delay={0}
-        />
-        <MetricCard
-          title="Active Tasks"
-          value="8 / 10"
-          numValue={8}
-          suffix=" / 10"
-          badge="2 due today"
-          badgeType="neutral"
-          progress={80}
-          icon="task_alt"
-          colorClass="text-slate-600"
-          bgClass="bg-slate-100"
-          delay={0.08}
-        />
-        <MetricCard
-          title="Learning Hours"
-          value="74 hrs"
-          numValue={74}
-          suffix=" hrs"
-          badge="Goal: 90 hrs"
-          badgeType="success"
-          progress={82}
-          icon="school"
-          colorClass="text-purple-600"
-          bgClass="bg-purple-50"
-          delay={0.16}
-        />
-        <MetricCard
-          title="Performance Status"
-          value="On Track"
-          badge="Tier 1"
-          badgeType="success"
-          progress={100}
-          icon="verified"
-          colorClass="text-emerald-600"
-          bgClass="bg-emerald-50"
-          subtitle="Next evaluation review in 14 days"
-          delay={0.24}
-        />
-      </div>
+      {(() => {
+        const totalTasks = realTasks.length;
+        const completedTasks = realTasks.filter((t) => t.status === "completed").length;
+        const pendingTasks = totalTasks - completedTasks;
+        const progressPct = totalTasks > 0 ? Math.round((completedTasks / totalTasks) * 100) : 100;
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
+            <MetricCard
+              title="Overall Progress"
+              value={`${progressPct}%`}
+              numValue={progressPct}
+              suffix="%"
+              badge={progressPct >= 80 ? "On Track" : "In Progress"}
+              badgeType="success"
+              progress={progressPct}
+              icon="trending_up"
+              colorClass="text-indigo-600"
+              bgClass="bg-indigo-50"
+              delay={0}
+            />
+            <MetricCard
+              title="Assigned Tasks"
+              value={`${pendingTasks} / ${totalTasks}`}
+              numValue={pendingTasks}
+              suffix={` / ${totalTasks}`}
+              badge={`${completedTasks} completed`}
+              badgeType="neutral"
+              progress={totalTasks > 0 ? Math.round((pendingTasks / totalTasks) * 100) : 0}
+              icon="task_alt"
+              colorClass="text-slate-600"
+              bgClass="bg-slate-100"
+              delay={0.08}
+            />
+            <MetricCard
+              title="Active Workflows"
+              value={`${new Set(realTasks.map((t) => t.workflow_id).filter(Boolean)).size || 1}`}
+              numValue={new Set(realTasks.map((t) => t.workflow_id).filter(Boolean)).size || 1}
+              badge="Enrolled"
+              badgeType="success"
+              progress={100}
+              icon="account_tree"
+              colorClass="text-purple-600"
+              bgClass="bg-purple-50"
+              delay={0.16}
+            />
+            <MetricCard
+              title="Performance Status"
+              value={progressPct >= 80 ? "On Track" : "Action Required"}
+              badge="Tier 1"
+              badgeType={progressPct >= 80 ? "success" : "warning"}
+              progress={progressPct}
+              icon="verified"
+              colorClass="text-emerald-600"
+              bgClass="bg-emerald-50"
+              subtitle="Live status from manager workflows"
+              delay={0.24}
+            />
+          </div>
+        );
+      })()}
 
       {/* ========================================================= */}
       {/* MIDDLE SECTION: VELOCITY CHART & NEXT ACTIONS            */}
@@ -340,90 +383,82 @@ export default function StudentDashboardPage() {
           </div>
         </motion.div>
 
-        {/* Right: Next Actions Checklist */}
+        {/* Right: Next Actions / Assigned Workflow Tasks */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 flex flex-col shadow-xs">
-          <div className="flex items-center justify-between mb-space-md">
-            <h2 className="font-headline font-bold text-headline-sm text-on-surface">Next Actions</h2>
-            <span className="text-label-sm text-primary font-bold">3 Pending</span>
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="font-headline font-bold text-base text-slate-900">Assigned Workflow Tasks</h2>
+              <p className="text-[11px] text-slate-500">Live deliverables from your manager &amp; workflows</p>
+            </div>
+            <span className="text-[11px] font-bold text-primary bg-indigo-50 border border-indigo-100 px-2.5 py-0.5 rounded-full">
+              {realTasks.filter(t => t.status !== "completed").length} Pending
+            </span>
           </div>
 
-          <div className="space-y-3 flex-1">
-            
-            {/* Action 1 */}
-            <div
-              onClick={() => toggleAction("act1")}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
-                actionDone["act1"]
-                  ? "bg-surface-container/50 border-surface-container-highest/40 opacity-60 line-through"
-                  : "bg-surface-container-lowest border-surface-container-highest hover:border-primary/40 shadow-2xs"
-              }`}
-            >
-              <div className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                actionDone["act1"] ? "bg-primary border-primary text-on-primary" : "border-slate-300 bg-white"
-              }`}>
-                {actionDone["act1"] && <span className="material-symbols-outlined text-sm">check</span>}
+          <div className="space-y-3 flex-1 overflow-y-auto max-h-[340px]">
+            {isLoadingTasks ? (
+              <div className="flex items-center justify-center p-8 text-slate-400">
+                <span className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin mr-2" />
+                <span className="text-xs">Loading assigned tasks...</span>
               </div>
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-body-md font-semibold text-on-surface">Complete Self Evaluation</h4>
-                  <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md">Due Fri</span>
-                </div>
-                <p className="text-body-sm text-on-surface-variant mt-0.5">
-                  Submit personal reflection for Q3 rubrics.
-                </p>
+            ) : realTasks.length === 0 ? (
+              <div className="p-6 text-center text-slate-400 border border-dashed border-slate-200 rounded-xl">
+                <span className="material-symbols-outlined text-2xl text-slate-300 mb-1">task</span>
+                <p className="text-xs font-medium">No assigned tasks yet</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Tasks assigned by your manager in workflows will appear here.</p>
               </div>
-            </div>
-
-            {/* Action 2 */}
-            <div
-              onClick={() => toggleAction("act2")}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
-                actionDone["act2"]
-                  ? "bg-surface-container/50 border-surface-container-highest/40 opacity-60 line-through"
-                  : "bg-surface-container-lowest border-surface-container-highest hover:border-primary/40 shadow-2xs"
-              }`}
-            >
-              <div className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                actionDone["act2"] ? "bg-primary border-primary text-on-primary" : "border-slate-300 bg-white"
-              }`}>
-                {actionDone["act2"] && <span className="material-symbols-outlined text-sm">check</span>}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-body-md font-semibold text-on-surface">Review Mentor Feedback</h4>
-                  <span className="text-[10px] font-bold text-primary bg-primary-fixed px-2 py-0.5 rounded-md">Dr. Tanaka</span>
-                </div>
-                <p className="text-body-sm text-on-surface-variant mt-0.5">
-                  Check comments on Cloud Microservices architecture PR.
-                </p>
-              </div>
-            </div>
-
-            {/* Action 3 */}
-            <div
-              onClick={() => toggleAction("act3")}
-              className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
-                actionDone["act3"]
-                  ? "bg-surface-container/50 border-surface-container-highest/40 opacity-60 line-through"
-                  : "bg-surface-container-lowest border-surface-container-highest hover:border-primary/40 shadow-2xs"
-              }`}
-            >
-              <div className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                actionDone["act3"] ? "bg-primary border-primary text-on-primary" : "border-slate-300 bg-white"
-              }`}>
-                {actionDone["act3"] && <span className="material-symbols-outlined text-sm">check</span>}
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <div className="flex items-center justify-between gap-2">
-                  <h4 className="text-body-md font-semibold text-on-surface">Japanese N3 Kanji Review</h4>
-                  <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md">Daily 20</span>
-                </div>
-                <p className="text-body-sm text-on-surface-variant mt-0.5">
-                  Complete today&apos;s JLPT Kanji flashcard deck.
-                </p>
-              </div>
-            </div>
-
+            ) : (
+              realTasks.map((task) => {
+                const isDone = task.status === "completed";
+                return (
+                  <div
+                    key={task.id}
+                    onClick={() => handleToggleTaskStatus(task.id, task.status)}
+                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                      isDone
+                        ? "bg-slate-50/60 border-slate-200 opacity-60 line-through"
+                        : "bg-white border-slate-200 hover:border-primary/40 shadow-2xs"
+                    }`}
+                  >
+                    <div
+                      className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
+                        isDone ? "bg-primary border-primary text-white" : "border-slate-300 bg-white"
+                      }`}
+                    >
+                      {isDone && <span className="material-symbols-outlined text-sm font-bold">check</span>}
+                    </div>
+                    <div className="flex-1 overflow-hidden">
+                      <div className="flex items-center justify-between gap-2">
+                        <h4 className="text-xs font-bold text-slate-900 truncate">{task.title}</h4>
+                        <span
+                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 ${
+                            isDone
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                              : "bg-amber-50 text-amber-700 border border-amber-100"
+                          }`}
+                        >
+                          {isDone ? "Completed" : "Pending"}
+                        </span>
+                      </div>
+                      {task.description && (
+                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{task.description}</p>
+                      )}
+                      <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400 flex-wrap">
+                        {task.workflow_name && (
+                          <span className="font-semibold text-indigo-600 bg-indigo-50/80 px-1.5 py-0.5 rounded">
+                            {task.workflow_name}
+                          </span>
+                        )}
+                        {task.assigned_by_name && (
+                          <span>By {task.assigned_by_name}</span>
+                        )}
+                        <span>• Click to {isDone ? "mark pending" : "complete"}</span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
           </div>
 
           <Link

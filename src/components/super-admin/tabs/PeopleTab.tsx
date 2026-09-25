@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { MOCK_ORGANISATIONS } from "../mockData";
 import { UserDirectoryRecord } from "../types";
-import { toggleBackendUserStatus } from "@/services/adminService";
+import { toggleBackendUserStatus, createBackendUser, deleteBackendUser } from "@/services/adminService";
 
 interface PeopleTabProps {
   users: UserDirectoryRecord[];
@@ -28,6 +28,8 @@ export default function PeopleTab({
   const [selectedUserForDrawer, setSelectedUserForDrawer] = useState<UserDirectoryRecord | null>(null);
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [activeMenuId, setActiveMenuId] = useState<string | null>(null);
+  const [isSubmittingInvite, setIsSubmittingInvite] = useState(false);
+  const [inviteError, setInviteError] = useState<string | null>(null);
 
   // Keep local users synced if parent users change
   React.useEffect(() => {
@@ -40,36 +42,29 @@ export default function PeopleTab({
   const [inviteOrg, setInviteOrg] = useState(MOCK_ORGANISATIONS[0].name);
   const [inviteRole, setInviteRole] = useState<"Learner" | "Teacher" | "HR Manager" | "Manager">("Learner");
 
-  const handleInviteUser = (e: React.FormEvent) => {
+  const handleInviteUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inviteName || !inviteEmail) return;
 
-    const orgRecord = MOCK_ORGANISATIONS.find((o) => o.name === inviteOrg);
+    setIsSubmittingInvite(true);
+    setInviteError(null);
+    try {
+      await createBackendUser({
+        name: inviteName.trim(),
+        email: inviteEmail.trim().toLowerCase(),
+        role: inviteRole,
+        department: "General",
+      });
 
-    const newUser: UserDirectoryRecord = {
-      id: `usr-${Date.now()}`,
-      name: inviteName,
-      email: inviteEmail,
-      role: inviteRole,
-      organisation: inviteOrg,
-      orgCode: orgRecord?.code || "ORG",
-      batchOrDept: "General Intake",
-      status: "Pending",
-      mfaEnabled: false,
-      lastActive: "Invited just now",
-      initials:
-        inviteName
-          .split(" ")
-          .map((w) => w[0])
-          .slice(0, 2)
-          .join("")
-          .toUpperCase() || "U",
-    };
-
-    setLocalUsers((prev) => [newUser, ...prev]);
-    setInviteName("");
-    setInviteEmail("");
-    setIsInviteModalOpen(false);
+      setInviteName("");
+      setInviteEmail("");
+      setIsInviteModalOpen(false);
+      onRefreshUsers?.();
+    } catch (err: unknown) {
+      setInviteError(err instanceof Error ? err.message : "Failed to create user");
+    } finally {
+      setIsSubmittingInvite(false);
+    }
   };
 
   const handleToggleSuspendUser = async (id: string) => {
@@ -94,7 +89,18 @@ export default function PeopleTab({
     setActiveMenuId(null);
 
     // Call backend API to persist
-    await toggleBackendUserStatus(id, isActiveBool);
+    await toggleBackendUserStatus(id, isActiveBool, target.role);
+    onRefreshUsers?.();
+  };
+
+  const handleDeleteUser = async (id: string) => {
+    const target = localUsers.find((u) => u.id === id);
+    if (!target) return;
+    if (!window.confirm(`Are you sure you want to deactivate and remove ${target.name}?`)) return;
+
+    setActiveMenuId(null);
+    if (selectedUserForDrawer?.id === id) setSelectedUserForDrawer(null);
+    await deleteBackendUser(id, target.role);
     onRefreshUsers?.();
   };
 
@@ -431,6 +437,14 @@ export default function PeopleTab({
                                 {user.status === "Suspended" ? "Activate User" : "Suspend Account"}
                               </span>
                             </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteUser(user.id)}
+                              className="flex items-center gap-2 px-3 py-2 text-xs font-semibold text-red-700 hover:bg-red-50 transition-colors cursor-pointer"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">delete</span>
+                              <span>Deactivate Profile</span>
+                            </button>
                           </div>
                         )}
                       </td>
@@ -640,19 +654,35 @@ export default function PeopleTab({
                   </select>
                 </div>
 
+                {inviteError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-xl text-red-600 text-xs flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm">error</span>
+                    <span>{inviteError}</span>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-end gap-2 pt-3 border-t border-slate-100">
                   <button
                     type="button"
+                    disabled={isSubmittingInvite}
                     onClick={() => setIsInviteModalOpen(false)}
-                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
+                    className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer disabled:opacity-50"
                   >
                     Cancel
                   </button>
                   <button
                     type="submit"
-                    className="px-4 py-2 rounded-xl bg-primary hover:bg-[#3d24c8] text-white font-bold shadow-xs cursor-pointer active:scale-95 transition-all"
+                    disabled={isSubmittingInvite}
+                    className="px-4 py-2 rounded-xl bg-primary hover:bg-[#3d24c8] text-white font-bold shadow-xs cursor-pointer active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
                   >
-                    Send Invitation
+                    {isSubmittingInvite ? (
+                      <>
+                        <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        <span>Creating...</span>
+                      </>
+                    ) : (
+                      <span>Send Invitation</span>
+                    )}
                   </button>
                 </div>
               </form>

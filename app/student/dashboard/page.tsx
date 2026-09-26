@@ -111,6 +111,8 @@ export default function StudentDashboardPage() {
   const [realTasks, setRealTasks] = useState<StudentTaskItem[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
+  const [mentors, setMentors] = useState<{ id: string; name: string; role: string }[]>([]);
+
   const loadStudentTasks = async () => {
     try {
       setIsLoadingTasks(true);
@@ -126,16 +128,13 @@ export default function StudentDashboardPage() {
   };
 
   useEffect(() => {
-    const s = getAuthSession();
-    if (s && s.user) {
-      const name = s.user.name || s.user.email.split("@")[0];
+    fetchMe().then((me) => {
+      const name = me.name || me.email.split("@")[0];
       setUserName(name);
-    } else {
-      fetchMe().then((me) => {
-        const name = me.name || me.email.split("@")[0];
-        setUserName(name);
-      }).catch(() => {});
-    }
+      if (me.scope?.details?.mentors) {
+        setMentors(me.scope.details.mentors);
+      }
+    }).catch(() => {});
     loadStudentTasks();
   }, []);
 
@@ -298,6 +297,36 @@ export default function StudentDashboardPage() {
           </div>
         );
       })()}
+
+      {/* ========================================================= */}
+      {/* YOUR MENTORS                                              */}
+      {/* ========================================================= */}
+      {mentors && mentors.length > 0 && (
+        <div className="bg-white p-6 sm:p-8 rounded-2xl border border-slate-200/80 shadow-xs mt-6">
+          <div className="flex items-center gap-3 mb-6">
+            <div className="p-2.5 bg-indigo-50 text-indigo-600 rounded-xl">
+              <span className="material-symbols-outlined text-xl">supervisor_account</span>
+            </div>
+            <div>
+              <h2 className="text-lg font-bold text-slate-900 font-headline">Your Mentors</h2>
+              <p className="text-sm text-slate-500">People assigned to guide you</p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {mentors.map((m) => (
+              <div key={m.id} className="flex items-center gap-4 p-4 border border-slate-200 rounded-xl bg-slate-50 hover:bg-slate-100 transition-colors">
+                <div className="h-10 w-10 bg-indigo-100 text-indigo-700 flex items-center justify-center rounded-full font-bold uppercase text-sm">
+                  {m.name ? m.name.charAt(0) : "M"}
+                </div>
+                <div>
+                  <div className="font-semibold text-slate-900 text-sm">{m.name || "Unknown"}</div>
+                  <div className="text-xs text-slate-500 capitalize">{m.role}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* ========================================================= */}
       {/* MIDDLE SECTION: VELOCITY CHART & NEXT ACTIONS            */}

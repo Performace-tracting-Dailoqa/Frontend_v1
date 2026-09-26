@@ -261,3 +261,68 @@ export async function updateStudentTaskStatus(taskId: string, status: string): P
   return await res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Teacher Workflows (/api/v1/teacher)
+// ---------------------------------------------------------------------------
+
+export interface Batch {
+  id: string;
+  teacher_id?: string;
+  manager_id?: string;
+  name: string;
+  department?: string;
+  status?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export async function fetchTeacherBatches(): Promise<Batch[]> {
+  const res = await fetch("/api/v1/teacher/batches", {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch batches (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function createTeacherBatch(payload: { name: string; department?: string; status?: string; student_ids?: string[] }): Promise<Batch> {
+  const res = await fetch("/api/v1/teacher/batches", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to create batch (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchTeacherUnassignedStudents(department?: string): Promise<TeamMember[]> {
+  const params = new URLSearchParams();
+  if (department) params.append("department", department);
+  const res = await fetch(`/api/v1/teacher/students/unassigned?${params.toString()}`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch unassigned students (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchTeacherStudents(): Promise<TeamMember[]> {
+  const res = await fetch("/api/v1/teacher/students", {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch teacher students (${res.status})`);
+  }
+  return await res.json();
+}

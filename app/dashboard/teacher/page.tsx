@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import TeacherLearnersTab from "./TeacherLearnersTab";
 
 export default function TeacherDashboardPage() {
   const [activeTab, setActiveTab] = useState<"dashboard" | "learners" | "progress" | "japanese" | "feedback" | "evaluations" | "reports" | "history">("dashboard");
@@ -223,12 +224,12 @@ export default function TeacherDashboardPage() {
               </div>
 
               {/* Active Tab Content */}
-              {(activeTab === "dashboard" || activeTab === "learners") && (
+              {activeTab === "dashboard" && (
                 <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs overflow-hidden">
                   <div className="p-5 border-b border-outline-variant/30 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                     <div>
                       <h3 className="font-headline font-bold text-on-surface text-lg">
-                        My Learners &amp; Cohorts
+                        My Learners &amp; Cohorts Overview
                       </h3>
                       <p className="text-body-sm text-on-surface-variant">
                         Scoped to batches: {assignedBatches.length > 0 ? assignedBatches.join(", ") : "No batches assigned yet"}
@@ -252,8 +253,16 @@ export default function TeacherDashboardPage() {
                         <span>Source of truth: GET /api/v1/auth/me</span>
                       </div>
                     </div>
-                  ) : null}
+                  ) : (
+                    <div className="p-8 text-center text-on-surface-variant">
+                      Go to the "My Learners" tab to manage cohorts and assignments.
+                    </div>
+                  )}
                 </div>
+              )}
+
+              {activeTab === "learners" && (
+                <TeacherLearnersTab />
               )}
 
               {activeTab === "progress" && (

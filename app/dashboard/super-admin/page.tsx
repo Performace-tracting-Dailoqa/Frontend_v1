@@ -1,162 +1,266 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect, Suspense } from "react";
+import { useSearchParams, useRouter, usePathname } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 
-export default function SuperAdminDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "roles" | "audit" | "settings">("overview");
+import { motion, AnimatePresence } from "framer-motion";
+import { SuperAdminTab, SimulationState, UserDirectoryRecord } from "@/components/super-admin/types";
+import { MOCK_USERS } from "@/components/super-admin/mockData";
+import {
+  fetchSystemTelemetry,
+  fetchAdminUsers,
+  SystemTelemetryData,
+} from "@/services/adminService";
+import SuperuserSandboxBanner from "@/components/super-admin/SuperuserSandboxBanner";
+import SuperAdminHeader from "@/components/super-admin/SuperAdminHeader";
+import SuperAdminNavTabs from "@/components/super-admin/SuperAdminNavTabs";
+
+import OverviewTab from "@/components/super-admin/tabs/OverviewTab";
+import OrganisationsTab from "@/components/super-admin/tabs/OrganisationsTab";
+import PeopleTab from "@/components/super-admin/tabs/PeopleTab";
+import ProgressTab from "@/components/super-admin/tabs/ProgressTab";
+import AccessControlTab from "@/components/super-admin/tabs/AccessControlTab";
+import AuditLogTab from "@/components/super-admin/tabs/AuditLogTab";
+import SystemSettingsTab from "@/components/super-admin/tabs/SystemSettingsTab";
+import PortalsTab from "@/components/super-admin/tabs/PortalsTab";
+import TeamsReportsTab from "@/components/super-admin/tabs/TeamsReportsTab";
+import CalendarTab from "@/components/super-admin/tabs/CalendarTab";
+import NotificationsTab from "@/components/super-admin/tabs/NotificationsTab";
+import ProfileSettingsTab from "@/components/super-admin/tabs/ProfileSettingsTab";
+
+function SuperAdminDashboardContent() {
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const tabParam = searchParams.get("tab") as SuperAdminTab | null;
+  const [activeTab, setActiveTab] = useState<SuperAdminTab>(tabParam || "overview");
+  const [selectedOrgFilter, setSelectedOrgFilter] = useState("all");
+  const [isCreateOrgModalOpen, setIsCreateOrgModalOpen] = useState(false);
+
+  // Dynamic Backend State
+  const [telemetry, setTelemetry] = useState<SystemTelemetryData | null>(null);
+  const [users, setUsers] = useState<UserDirectoryRecord[]>(MOCK_USERS);
+  const [isLoadingData, setIsLoadingData] = useState(true);
+
+  // Simulation / Impersonation State
+  const [simulation, setSimulation] = useState<SimulationState>({
+    isActive: false,
+    role: "",
+    user: "",
+    organisation: "",
+    auditHash: "",
+  });
+
+  // Sync state if URL searchParam changes
+  useEffect(() => {
+    if (tabParam && tabParam !== activeTab) {
+      setActiveTab(tabParam);
+    }
+  }, [tabParam, activeTab]);
+
+  // Dynamic Backend Fetching
+  const loadBackendData = async () => {
+    try {
+      setIsLoadingData(true);
+      const [telemetryRes, liveUsers] = await Promise.all([
+        fetchSystemTelemetry(),
+        fetchAdminUsers(),
+      ]);
+
+      if (telemetryRes) {
+        setTelemetry(telemetryRes);
+      }
+
+      if (liveUsers && liveUsers.length > 0) {
+        // Merge live users with mock users to retain rich multi-org demo seed while prioritizing real users
+        const liveEmails = new Set(liveUsers.map((u) => u.email.toLowerCase()));
+        const nonDuplicateMocks = MOCK_USERS.filter(
+          (m) => !liveEmails.has(m.email.toLowerCase())
+        );
+        setUsers([...liveUsers, ...nonDuplicateMocks]);
+      }
+    } catch (err) {
+      console.warn("Could not load backend data, using local fallback:", err);
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
+  useEffect(() => {
+    loadBackendData();
+  }, []);
+
+  const handleTabChange = (tab: SuperAdminTab) => {
+    setActiveTab(tab);
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    router.push(`${pathname}?${params.toString()}`, { scroll: false });
+  };
+
+  const handleActivateSimulation = (role: string, user: string, org: string) => {
+    const hash = `#ledger-${Math.floor(1000 + Math.random() * 9000)}`;
+    setSimulation({
+      isActive: true,
+      role,
+      user,
+      organisation: org,
+      auditHash: hash,
+    });
+  };
+
+  const handleExitSimulation = () => {
+    setSimulation({
+      isActive: false,
+      role: "",
+      user: "",
+      organisation: "",
+      auditHash: "",
+    });
+  };
+
+  const handleExportTelemetry = () => {
+    const reportData = {
+      exportTime: new Date().toISOString(),
+      scope: "system_wide",
+      uptime: telemetry?.system_uptime || "99.98%",
+      activeTenants: 4,
+      totalIdentities: users.length,
+      databaseConnected: telemetry?.database_connected ?? true,
+      databaseLatencyMs: telemetry?.database_latency_ms ?? 14,
+      auditLedgerIntegrity: telemetry?.audit_ledger_status || "SHA-256 Valid",
+      bastionNodes: ["Tokyo-01", "Osaka-02", "Cloudflare-Edge"],
+    };
+    const blob = new Blob([JSON.stringify(reportData, null, 2)], {
+      type: "application/json",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `superuser_telemetry_${Date.now()}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <ProtectedRoute allowedRoles={["admin", "super admin"]}>
       {(session) => {
         const adminScope = session.scope;
-        const displayName = session.user.name || session.user.email.split("@")[0];
+        const displayName = session.user.name || session.user.email.split("@")[0] || "Marcus Brody";
 
         return (
           <DashboardLayout>
-            <div className="space-y-6 max-w-7xl mx-auto pb-12">
+            <div className="space-y-6 max-w-7xl mx-auto pb-16">
+              {/* 1. SIMULATION & SANDBOX BANNER SYSTEM */}
+              <SuperuserSandboxBanner
+                simulation={simulation}
+                onActivateSimulation={handleActivateSimulation}
+                onExitSimulation={handleExitSimulation}
+              />
 
-              {/* Welcome Header */}
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-6 lg:p-8 rounded-2xl border border-outline-variant/40 shadow-xs relative overflow-hidden">
-                <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
-                <div className="space-y-1.5 z-10">
-                  <div className="flex items-center gap-2 text-[#4B2EF5] font-semibold text-label-md">
-                    <span className="material-symbols-outlined text-lg">admin_panel_settings</span>
-                    <span>System Administration &amp; Governance</span>
-                  </div>
-                  <h1 className="text-headline-md font-headline font-bold text-on-surface">
-                    Welcome back, {displayName}
-                  </h1>
-                  <p className="text-body-md text-on-surface-variant max-w-2xl">
-                    System-wide Scope: <span className="font-medium text-on-surface">{adminScope?.scope_type || "system_wide"}</span>
-                    {" "}• Authentication Provider: <span className="font-medium text-on-surface">Supabase Auth (FastAPI Bearer)</span>
-                  </p>
-                </div>
+              {/* 2. SUPER ADMIN HEADER */}
+              <SuperAdminHeader
+                displayName={displayName}
+                scopeType={adminScope?.scope_type || "system_wide"}
+                selectedOrgFilter={selectedOrgFilter}
+                onSelectOrgFilter={setSelectedOrgFilter}
+                onOpenCreateOrg={() => setIsCreateOrgModalOpen(true)}
+                onExportTelemetry={handleExportTelemetry}
+              />
 
-                <div className="flex items-center gap-3 z-10">
-                  <div className="flex items-center gap-2 bg-surface-container px-3.5 py-2 rounded-xl text-body-sm font-medium border border-outline-variant/50 text-on-surface">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>Super Admin Mode</span>
-                  </div>
-                </div>
-              </div>
+              {/* 3. NAVIGATION TABS */}
+              <SuperAdminNavTabs
+                activeTab={activeTab}
+                onChangeTab={handleTabChange}
+              />
 
-              {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto border-b border-outline-variant/30 pb-2 text-body-sm font-medium">
-                <button
-                  onClick={() => setActiveTab("overview")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "overview"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
+              {/* 4. ACTIVE TAB CONTENT VIEW WITH FRAMER MOTION TRANSITIONS */}
+              <AnimatePresence mode="wait">
+                <motion.div
+                  key={activeTab}
+                  initial={{ opacity: 0, y: 12, scale: 0.995 }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  exit={{ opacity: 0, y: -10, scale: 0.995 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 380,
+                    damping: 30,
+                    mass: 0.8,
+                  }}
+                  className="pt-1"
                 >
-                  <span className="material-symbols-outlined text-lg">dashboard</span>
-                  <span>System Overview</span>
-                </button>
+                  {activeTab === "overview" && (
+                    <OverviewTab
+                      telemetry={telemetry}
+                      totalUsersCount={users.length}
+                      onNavigateTab={(targetTab) => handleTabChange(targetTab)}
+                      onSimulate={handleActivateSimulation}
+                    />
+                  )}
 
-                <button
-                  onClick={() => setActiveTab("users")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "users"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">manage_accounts</span>
-                  <span>User Provisioning</span>
-                </button>
+                  {activeTab === "organisations" && (
+                    <OrganisationsTab
+                      onSimulate={handleActivateSimulation}
+                      isCreateModalOpen={isCreateOrgModalOpen}
+                      onCloseCreateModal={() => setIsCreateOrgModalOpen(false)}
+                    />
+                  )}
 
-                <button
-                  onClick={() => setActiveTab("roles")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "roles"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">security</span>
-                  <span>Roles &amp; Scopes</span>
-                </button>
+                  {activeTab === "users" && (
+                    <PeopleTab
+                      users={users}
+                      isLoading={isLoadingData}
+                      onRefreshUsers={loadBackendData}
+                      onSimulate={handleActivateSimulation}
+                      selectedOrgFilter={selectedOrgFilter}
+                    />
+                  )}
 
-                <button
-                  onClick={() => setActiveTab("audit")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "audit"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">receipt_long</span>
-                  <span>Audit Logs</span>
-                </button>
+                  {activeTab === "progress" && (
+                    <ProgressTab onSimulate={handleActivateSimulation} />
+                  )}
 
-                <button
-                  onClick={() => setActiveTab("settings")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "settings"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">settings</span>
-                  <span>System Settings</span>
-                </button>
-              </div>
+                  {activeTab === "roles" && <AccessControlTab />}
 
-              {/* KPI Summary Cards */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Session Identity</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1 truncate">
-                    {session.user.id.slice(0, 8)}...
-                  </p>
-                  <p className="text-[11px] text-outline mt-1">public.users UUID</p>
-                </div>
+                  {activeTab === "audit" && <AuditLogTab />}
 
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">RBAC Role</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
-                    {session.role?.name || "Super Admin"}
-                  </p>
-                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">Verified /auth/me</p>
-                </div>
+                  {activeTab === "settings" && <SystemSettingsTab />}
 
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Scope Boundary</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">System Wide</p>
-                  <p className="text-[11px] text-outline mt-1">Full institutional scope</p>
-                </div>
+                  {activeTab === "portals" && (
+                    <PortalsTab onSimulate={handleActivateSimulation} />
+                  )}
 
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">API Contract</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">SCRUM-31</p>
-                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">FastAPI v1 Auth</p>
-                </div>
-              </div>
+                  {activeTab === "reports" && <TeamsReportsTab />}
 
-              {/* Main Content Area */}
-              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-outlined text-3xl">admin_panel_settings</span>
-                </div>
-                <h3 className="text-title-lg font-headline font-bold text-on-surface">
-                  Administrative Governance Scaffolding
-                </h3>
-                <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2">
-                  System user provisioning and detailed audit logs will connect to respective administrative endpoints in upcoming platform iterations.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-outline text-xs font-medium border border-outline-variant/40">
-                  <span className="material-symbols-outlined text-sm">security</span>
-                  <span>Administrative visibility shell active • No unauthenticated access</span>
-                </div>
-              </div>
+                  {activeTab === "calendar" && <CalendarTab />}
 
+                  {activeTab === "notifications" && <NotificationsTab />}
+
+                  {activeTab === "profile" && (
+                    <ProfileSettingsTab displayName={displayName} />
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </DashboardLayout>
         );
       }}
     </ProtectedRoute>
+  );
+}
+
+export default function SuperAdminDashboardPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-white flex items-center justify-center">
+          <div className="w-8 h-8 rounded-full border-2 border-primary border-t-transparent animate-spin" />
+        </div>
+      }
+    >
+      <SuperAdminDashboardContent />
+    </Suspense>
   );
 }

@@ -26,8 +26,8 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-surface text-on-surface font-body antialiased selection:bg-primary selection:text-white">
-        {children}
-      </body>
+                {children}
+                    </body>
     </html>
   );
 }

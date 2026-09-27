@@ -80,7 +80,17 @@ function LoginForm() {
       //    and store ONLY profile metadata — no token in localStorage.
       const meData = await fetchMe();
 
-      saveProfileSession(meData);
+      saveAuthSession({
+        token: loginData.access_token,
+        tokenType: loginData.token_type || "bearer",
+        expiresIn: loginData.expires_in,
+        mustChangePassword: false,
+        user: meData,
+        role: meData.role,
+        profile: meData.profile || null,
+        scope: meData.scope || null,
+        loginAt: new Date().toISOString(),
+      });
 
       // 4. Role-based routing based strictly on /auth/me
       const targetDashboard = getRoleDashboardPath(meData.role?.name);

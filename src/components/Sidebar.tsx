@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAuthSession, apiLogout, UserSession } from "@/utils/auth";
 
 interface NavItem {
@@ -93,13 +93,30 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
   if (norm.includes("admin")) {
     return [
       {
-        title: "Administration",
+        title: "Platform Overview",
         items: [
-          { label: "System Overview", href: "/dashboard/super-admin", icon: "admin_panel_settings" },
-          { label: "User Directory", href: "/dashboard/super-admin#users", icon: "manage_accounts" },
-          { label: "Role Mappings", href: "/dashboard/super-admin#roles", icon: "security" },
-          { label: "Audit Logs", href: "/dashboard/super-admin#logs", icon: "receipt_long" },
-          { label: "System Settings", href: "/dashboard/super-admin#settings", icon: "settings" },
+          { label: "Overview & Sandbox", href: "/dashboard/super-admin", icon: "dashboard" },
+          { label: "Organisations", href: "/dashboard/super-admin?tab=organisations", icon: "corporate_fare" },
+          { label: "Global People", href: "/dashboard/super-admin?tab=users", icon: "group" },
+          { label: "Progress Oversight", href: "/dashboard/super-admin?tab=progress", icon: "monitoring" },
+          { label: "Google Calendar", href: "/dashboard/super-admin?tab=calendar", icon: "calendar_month" },
+        ],
+      },
+      {
+        title: "Security & Governance",
+        items: [
+          { label: "Access Control", href: "/dashboard/super-admin?tab=roles", icon: "security" },
+          { label: "Audit Ledger", href: "/dashboard/super-admin?tab=audit", icon: "receipt_long" },
+          { label: "System Settings", href: "/dashboard/super-admin?tab=settings", icon: "settings" },
+          { label: "Profile & Keys", href: "/dashboard/super-admin?tab=profile", icon: "account_circle" },
+        ],
+      },
+      {
+        title: "Operations & Portals",
+        items: [
+          { label: "Portals View-As", href: "/dashboard/super-admin?tab=portals", icon: "switch_account" },
+          { label: "Teams & Gantt", href: "/dashboard/super-admin?tab=reports", icon: "insights" },
+          { label: "Alerts & Approvals", href: "/dashboard/super-admin?tab=notifications", icon: "notifications" },
         ],
       },
     ];
@@ -129,6 +146,7 @@ export default function Sidebar({
 }) {
   const pathname = usePathname();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [session, setSession] = useState<UserSession | null>(null);
 
   useEffect(() => {
@@ -150,7 +168,8 @@ export default function Sidebar({
     .join("")
     .toUpperCase() || "U";
   const roleName = session?.user?.role?.name || "Member";
-  const subtitle = session?.user?.email || session?.user?.profile?.department || "Dailoqa PMS";
+  const departmentOrEmail = session?.user?.profile?.department || session?.user?.email || "Dailoqa PMS";
+  const subtitle = departmentOrEmail;
 
   const navSections = getRoleNavSections(session?.user?.role?.name);
 
@@ -173,7 +192,7 @@ export default function Sidebar({
       >
         {/* Top Header / Branding */}
         <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : "justify-between"} border-b border-slate-200/80`}>
-          <Link href="/dashboard" className="flex items-center gap-2.5">
+          <Link href="/" onClick={(e) => { e.preventDefault(); router.push("/"); }} className="flex items-center gap-2.5 cursor-pointer z-10">
             <Image
               alt="Dailoqa"
               src="/dailoqa_logo.png"
@@ -226,9 +245,6 @@ export default function Sidebar({
                   {departmentOrEmail}
                 </p>
               </div>
-              <p className="text-body-sm text-on-surface-variant text-[11px] truncate">
-                {subtitle}
-              </p>
             </div>
           </div>
         )}
@@ -243,7 +259,17 @@ export default function Sidebar({
                 </p>
               )}
               {section.items.map((item) => {
-                const isActive = pathname === item.href || pathname?.startsWith(`${item.href}/`);
+                const [itemPath, itemQuery] = item.href.split("?");
+                const isExactPath = pathname === itemPath;
+                let isActive = false;
+                if (itemQuery) {
+                  const itemTab = new URLSearchParams(itemQuery).get("tab");
+                  const currentTab = searchParams.get("tab");
+                  isActive = isExactPath && itemTab === currentTab;
+                } else {
+                  const currentTab = searchParams.get("tab");
+                  isActive = isExactPath && (!currentTab || currentTab === "overview");
+                }
                 return (
                   <div key={item.href} className="relative group">
                     <Link

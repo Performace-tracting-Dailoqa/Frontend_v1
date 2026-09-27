@@ -1,11 +1,40 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import PeopleTab from "@/components/super-admin/tabs/PeopleTab";
+import { fetchAdminUsers } from "@/services/adminService";
+import { UserDirectoryRecord } from "@/components/super-admin/types";
 
 export default function HRDashboardPage() {
   const [activeTab, setActiveTab] = useState<"employees" | "cycles" | "evaluations" | "analytics" | "reports" | "notifications">("employees");
+  const [users, setUsers] = useState<UserDirectoryRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const loadUsers = async () => {
+    try {
+      setIsLoading(true);
+      const data = await fetchAdminUsers();
+      if (data) {
+        setUsers(data);
+      }
+    } catch (err) {
+      console.warn("Failed to load users in HR dashboard:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadUsers();
+    if (typeof window !== "undefined") {
+      const hash = window.location.hash.replace("#", "");
+      if (hash && ["employees", "cycles", "evaluations", "analytics", "reports", "notifications"].includes(hash)) {
+        setActiveTab(hash as typeof activeTab);
+      }
+    }
+  }, []);
 
   return (
     <ProtectedRoute allowedRoles={["hr"]}>
@@ -119,15 +148,15 @@ export default function HRDashboardPage() {
               {/* KPI Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Active Cycles</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">0 Active</p>
-                  <p className="text-[11px] text-outline mt-1">Cycle engine not yet provisioned</p>
+                  <span className="text-label-sm text-outline font-medium">Total Personnel</span>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">{users.length} Enrolled</p>
+                  <p className="text-[11px] text-outline mt-1">Live database records</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Evaluation State</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">Uninitialized</p>
-                  <p className="text-[11px] text-outline mt-1">Backend cycles pending</p>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">Ready</p>
+                  <p className="text-[11px] text-outline mt-1">Workflow evaluations active</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
@@ -143,22 +172,39 @@ export default function HRDashboardPage() {
                 </div>
               </div>
 
-              {/* Main Content Area: Empty/Coming-Soon State without fake data */}
-              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-outlined text-3xl">hourglass_top</span>
+              {/* Main Content Area */}
+              {activeTab === "employees" ? (
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-6">
+                  <div className="mb-4">
+                    <h2 className="text-title-lg font-bold text-on-surface">Personnel Directory &amp; Roles</h2>
+                    <p className="text-body-sm text-on-surface-variant">
+                      Manage HR, Managers, Teachers, and Learners across the organization.
+                    </p>
+                  </div>
+                  <PeopleTab
+                    users={users}
+                    isLoading={isLoading}
+                    onRefreshUsers={loadUsers}
+                    onSimulate={() => {}}
+                  />
                 </div>
-                <h3 className="text-title-lg font-headline font-bold text-on-surface">
-                  Performance Cycle Management
-                </h3>
-                <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2">
-                  Performance cycle configuration, evaluation monitoring, and organization-wide analytics are scheduled for subsequent PMS milestones.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-outline text-xs font-medium border border-outline-variant/40">
-                  <span className="material-symbols-outlined text-sm">info</span>
-                  <span>Empty state • Performance cycle backend/database functionality is not currently implemented</span>
+              ) : (
+                <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">
+                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto mb-4">
+                    <span className="material-symbols-outlined text-3xl">hourglass_top</span>
+                  </div>
+                  <h3 className="text-title-lg font-headline font-bold text-on-surface">
+                    {activeTab === "cycles" ? "Performance Cycle Management" : `${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)} Module`}
+                  </h3>
+                  <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2">
+                    Performance cycle configuration and organization-wide analytics are scheduled for subsequent PMS milestones.
+                  </p>
+                  <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-outline text-xs font-medium border border-outline-variant/40">
+                    <span className="material-symbols-outlined text-sm">info</span>
+                    <span>Performance cycle backend/database functionality is not currently implemented</span>
+                  </div>
                 </div>
-              </div>
+              )}
 
             </div>
           </DashboardLayout>

@@ -1,8 +1,12 @@
 "use client";
 
+
+import { getAuthSession, fetchMe, saveProfileSession, UserSession } from "@/utils/auth";
+
 import React, { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 import Magnet from "@/components/animations/Magnet";
 
@@ -15,14 +19,38 @@ interface StudentHeaderProps {
 }
 
 export default function StudentHeader({
+
   onToggleSidebar,
   isCollapsed = false,
   isDark = false,
   onToggleTheme,
   title = "PMS Student Portal",
 }: StudentHeaderProps) {
+  const router = useRouter();
   const [showNotifications, setShowNotifications] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
+  const [session, setSession] = useState<UserSession | null>(null);
+
+  React.useEffect(() => {
+    const s = getAuthSession();
+    if (s) {
+      setSession(s);
+    } else {
+      fetchMe().then((me) => {
+        saveProfileSession(me);
+        setSession(getAuthSession());
+      }).catch(() => {});
+    }
+  }, []);
+
+  const displayName = session?.user?.name || session?.user?.email?.split("@")[0] || "User";
+  const initials = displayName
+    .split(" ")
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase() || "U";
+
 
   const notifications = [
     { id: 1, title: "Mentor Feedback Received", time: "10 mins ago", unread: true, icon: "rate_review" },
@@ -54,9 +82,9 @@ export default function StudentHeader({
         </Magnet>
 
         <div className="flex items-center gap-space-sm">
-          <span className="hidden sm:inline-block font-headline font-bold text-headline-sm text-slate-900">
+          <Link href="/" onClick={(e) => { e.preventDefault(); router.push("/"); }} className="hidden sm:inline-block font-headline font-bold text-headline-sm text-slate-900 hover:text-primary transition-colors cursor-pointer">
             {title}
-          </span>
+          </Link>
           <div className="bg-indigo-50 border border-indigo-200 text-indigo-700 px-2.5 py-0.5 rounded-md text-[11px] font-bold uppercase tracking-wider hidden md:inline-block">
             Trainee View
           </div>
@@ -83,7 +111,7 @@ export default function StudentHeader({
           <span>Q3 2026</span>
         </div>
 
-        {/* Theme Toggle Button */}
+                {/* Theme Toggle Button */}
         {onToggleTheme && (
           <button
             onClick={onToggleTheme}
@@ -151,8 +179,11 @@ export default function StudentHeader({
 
         {/* User Mini Profile Avatar */}
         <Link href="/student/dashboard" className="flex items-center gap-2 pl-2">
-          <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs shadow-xs">
-            KS
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-full bg-primary text-on-primary flex items-center justify-center font-bold text-xs shadow-xs" title={displayName}>
+              {initials}
+            </div>
+            <span className="hidden md:inline-block text-xs font-semibold text-slate-800">{displayName}</span>
           </div>
         </Link>
       </div>

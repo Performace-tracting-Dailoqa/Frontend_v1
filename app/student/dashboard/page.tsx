@@ -334,83 +334,21 @@ export default function StudentDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         
         {/* Left: Task Velocity Interactive Chart (Span 2) */}
-        <motion.div
-          initial={{ opacity: 0, y: 15 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.5, delay: 0.2 }}
-          className="lg:col-span-2 bg-white p-6 rounded-2xl border border-slate-200/80 flex flex-col justify-between shadow-xs"
-        >
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
-            <div>
-              <h2 className="font-headline font-bold text-lg text-slate-900">
-                Performance &amp; Task Velocity
-              </h2>
-              <p className="text-xs text-slate-500 mt-0.5">
-                Weekly task completion velocity vs. milestone benchmarks
-              </p>
-            </div>
-            <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 self-start sm:self-auto text-xs">
-              <button
-                onClick={() => setVelocityTimeframe("weekly")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                  velocityTimeframe === "weekly"
-                    ? "bg-white text-indigo-600 shadow-2xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                Weekly
-              </button>
-              <button
-                onClick={() => setVelocityTimeframe("monthly")}
-                className={`px-3 py-1 rounded-lg font-semibold transition-all cursor-pointer ${
-                  velocityTimeframe === "monthly"
-                    ? "bg-white text-indigo-600 shadow-2xs"
-                    : "text-slate-500 hover:text-slate-900"
-                }`}
-              >
-                Monthly
-              </button>
-            </div>
+        <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-dashed border-outline-variant/60 flex flex-col justify-center items-center shadow-xs text-center min-h-[300px]">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">api</span>
           </div>
-
-          {/* Bar Chart Visualization */}
-          <div className="h-64 flex items-end gap-3 sm:gap-6 justify-between pt-4 px-2 sm:px-4 border-b border-slate-100">
-            {chartData.map((item, idx) => (
-              <div key={item.day} className="flex-1 flex flex-col items-center gap-1 h-full justify-end group">
-                <span className="text-[11px] font-mono text-indigo-600 font-bold opacity-0 group-hover:opacity-100 transition-opacity">
-                  {item.pct}%
-                </span>
-                <motion.div
-                  initial={{ height: 0 }}
-                  animate={{ height: `${item.pct}%` }}
-                  transition={{ duration: 0.8, delay: idx * 0.06, ease: "easeOut" }}
-                  className="w-full max-w-[48px] bg-indigo-100/80 rounded-t-lg group-hover:bg-indigo-600 transition-colors duration-300 relative shadow-2xs"
-                >
-                  <div className="absolute inset-0 bg-gradient-to-t from-transparent to-white/20 rounded-t-lg pointer-events-none" />
-                </motion.div>
-                <span className="text-xs text-slate-500 group-hover:text-slate-900 font-medium pt-1">
-                  {item.day}
-                </span>
-              </div>
-            ))}
+          <h2 className="font-headline font-bold text-lg text-slate-900 mb-2">
+            Performance &amp; Task Velocity
+          </h2>
+          <p className="text-sm text-slate-500 max-w-sm mb-4">
+            Backend Developer: Integrate student task velocity and performance chart data here.
+          </p>
+          <div className="inline-flex flex-col gap-2 text-left bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <code className="text-xs text-slate-600 font-mono">GET /api/v1/student/velocity</code>
+            <span className="text-[11px] text-slate-500 mt-1 block">Expected data: Weekly/Monthly points and progress percentages.</span>
           </div>
-
-          {/* Chart Insights Footer */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 pt-4 mt-2 text-xs">
-            <div>
-              <span className="text-slate-500 block">Current Velocity</span>
-              <strong className="text-slate-900 font-semibold text-sm">18.4 pts / wk</strong>
-            </div>
-            <div>
-              <span className="text-slate-500 block">Quarterly Benchmark</span>
-              <strong className="text-slate-900 font-semibold text-sm">16.0 pts / wk</strong>
-            </div>
-            <div className="col-span-2 sm:col-span-1">
-              <span className="text-slate-500 block">Efficiency Index</span>
-              <strong className="text-emerald-600 font-semibold text-sm">+15% ahead</strong>
-            </div>
-          </div>
-        </motion.div>
+        </div>
 
         {/* Right: Next Actions / Assigned Workflow Tasks */}
         <div className="bg-white p-6 rounded-2xl border border-slate-200/80 flex flex-col shadow-xs">
@@ -506,125 +444,36 @@ export default function StudentDashboardPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-space-md sm:gap-space-lg">
         
         {/* Recent Feedback & Evaluations (Span 2) */}
-        <div className="lg:col-span-2 bg-surface-container-low p-6 sm:p-space-lg rounded-2xl border border-surface-container-highest/60 shadow-xs">
-          <div className="flex items-center justify-between mb-space-md">
-            <div>
-              <h2 className="font-headline font-bold text-headline-sm text-on-surface">
-                Recent Feedback &amp; Evaluations
-              </h2>
-              <p className="text-body-sm text-on-surface-variant">
-                Evaluator ratings and rubric notes from assigned mentors
-              </p>
-            </div>
-            <Link
-              href="/student/evaluations"
-              className="text-label-sm font-bold text-primary hover:underline"
-            >
-              View History
-            </Link>
+        <div className="lg:col-span-2 bg-surface-container-low p-6 sm:p-space-lg rounded-2xl border border-dashed border-outline-variant/60 flex flex-col justify-center items-center text-center">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">api</span>
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Feedback Card 1 */}
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-surface-container-highest/80 flex flex-col justify-between shadow-2xs">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-primary uppercase">Internship Domain</span>
-                  <div className="flex items-center text-amber-500 text-xs">
-                    {"★".repeat(5)}
-                    <span className="ml-1 text-on-surface font-bold">4.9</span>
-                  </div>
-                </div>
-                <h4 className="text-body-md font-bold text-on-surface mb-1">
-                  Mid-Quarter Performance Review
-                </h4>
-                <p className="text-body-sm text-on-surface-variant line-clamp-3">
-                  &ldquo;Kanishka demonstrated remarkable speed in adopting our Next.js App Router and Next Auth architecture. Clean TypeScript typing and enthusiastic team collaboration.&rdquo;
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
-                <span className="font-medium text-on-surface">Dr. Tanaka • Lead Architect</span>
-                <span>Sep 18, 2026</span>
-              </div>
-            </div>
-
-            {/* Feedback Card 2 */}
-            <div className="p-4 rounded-xl bg-surface-container-lowest border border-surface-container-highest/80 flex flex-col justify-between shadow-2xs">
-              <div>
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-mono font-bold text-purple-600 uppercase">Japanese Language</span>
-                  <div className="flex items-center text-amber-500 text-xs">
-                    {"★".repeat(4)}
-                    <span className="ml-1 text-on-surface font-bold">4.7</span>
-                  </div>
-                </div>
-                <h4 className="text-body-md font-bold text-on-surface mb-1">
-                  Business Keigo &amp; Dialogue
-                </h4>
-                <p className="text-body-sm text-on-surface-variant line-clamp-3">
-                  &ldquo;Excellent pronunciation during our standup rehearsal. Grammar is sound; recommend focusing on polite email conventions (Sonkeigo/Kenjougo) next week.&rdquo;
-                </p>
-              </div>
-              <div className="mt-4 pt-3 border-t border-surface-container flex items-center justify-between text-xs text-on-surface-variant">
-                <span className="font-medium text-on-surface">Yuki Sato • Language Mentor</span>
-                <span>Sep 15, 2026</span>
-              </div>
-            </div>
+          <h2 className="font-headline font-bold text-headline-sm text-on-surface mb-2">
+            Recent Feedback &amp; Evaluations
+          </h2>
+          <p className="text-body-sm text-on-surface-variant max-w-sm mb-4">
+            Backend Developer: Integrate recent feedback from mentors and evaluators here.
+          </p>
+          <div className="inline-flex flex-col gap-2 text-left bg-surface-container p-4 rounded-lg border border-outline-variant/40">
+            <code className="text-xs text-on-surface-variant font-mono">GET /api/v1/student/feedback/recent</code>
+            <span className="text-[11px] text-outline mt-1 block">Expected data: Array of feedback objects with ratings and comments.</span>
           </div>
         </div>
 
         {/* Curriculum & Skills Snapshot Widget */}
-        <div className="relative bg-white p-6 sm:p-space-lg rounded-2xl border border-slate-200/80 flex flex-col justify-between shadow-xs overflow-hidden">
-          <BorderBeam size={220} duration={12} colorFrom="#4B2EF5" colorTo="#a855f7" borderWidth={1.5} />
-          <div>
-            <div className="flex items-center justify-between mb-2">
-              <span className="text-xs font-mono font-bold uppercase tracking-wider text-primary">
-                CURRICULUM ROADMAP
-              </span>
-              <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-100 text-indigo-700">
-                Sprint 6 of 8
-              </span>
-            </div>
-            <h2 className="font-headline font-bold text-headline-sm text-on-surface mb-1">
-              Learning Trajectory
-            </h2>
-            <p className="text-body-sm text-on-surface-variant mb-4">
-              Your weekly task progress and technical milestone completion.
-            </p>
-
-            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200/80 mb-4">
-              <div className="flex items-center justify-between mb-2">
-                <span className="text-body-sm font-semibold text-on-surface">Active Sprint</span>
-                <span className="text-body-sm font-bold text-emerald-600 flex items-center gap-1">
-                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-ping" />
-                  On Schedule
-                </span>
-              </div>
-              <div className="flex items-center justify-between text-xs text-on-surface-variant mb-1">
-                <span>Technical Milestones</span>
-                <span className="font-bold text-on-surface">88%</span>
-              </div>
-              <div className="w-full bg-slate-200/80 h-2 rounded-full overflow-hidden">
-                <div className="bg-primary h-full rounded-full" style={{ width: "88%" }} />
-              </div>
-            </div>
-
-            <div className="flex items-center justify-between text-xs text-on-surface-variant px-1">
-              <span>Next Evaluation Cycle</span>
-              <strong className="text-on-surface">End of Quarter (Q3)</strong>
-            </div>
+        <div className="relative bg-white p-6 sm:p-space-lg rounded-2xl border border-dashed border-slate-200/80 flex flex-col justify-center items-center text-center overflow-hidden">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">api</span>
           </div>
-
-          <div className="mt-6 w-full">
-            <Magnet padding={20} magnetStrength={3} className="w-full">
-              <Link
-                href="/student/learning-progress"
-                className="w-full py-3 px-4 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-900 font-semibold text-label-md flex items-center justify-center gap-2 transition-all border border-slate-200 shadow-2xs"
-              >
-                <span>View Full Learning Roadmap</span>
-                <span className="material-symbols-outlined text-sm">arrow_forward</span>
-              </Link>
-            </Magnet>
+          <h2 className="font-headline font-bold text-headline-sm text-on-surface mb-2">
+            Curriculum Roadmap
+          </h2>
+          <p className="text-body-sm text-on-surface-variant max-w-xs mb-4">
+            Backend Developer: Integrate the student's curriculum and skill progression roadmap.
+          </p>
+          <div className="inline-flex flex-col gap-2 text-left bg-slate-50 p-4 rounded-lg border border-slate-200">
+            <code className="text-xs text-slate-600 font-mono">GET /api/v1/student/curriculum/progress</code>
+            <span className="text-[11px] text-slate-500 mt-1 block">Expected data: Milestones, sprints, and current progression metrics.</span>
           </div>
         </div>
 

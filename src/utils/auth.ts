@@ -136,7 +136,7 @@ export function isUserLoggedIn(): boolean {
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
-  window.location.assign("/api/auth/microsoft");
+  window.location.href = "/api/auth/microsoft";
 }
 
 export function getLoginErrorMessage(code?: string | null): string {

@@ -14,7 +14,6 @@ import {
   SystemTelemetryData,
 } from "@/services/adminService";
 import SuperAdminHeader from "@/components/super-admin/SuperAdminHeader";
-import SuperAdminNavTabs from "@/components/super-admin/SuperAdminNavTabs";
 
 import OverviewTab from "@/components/super-admin/tabs/OverviewTab";
 import TeamsTab from "@/components/super-admin/tabs/TeamsTab";
@@ -97,7 +96,17 @@ function SuperAdminDashboardContent() {
                 onRefresh={loadTelemetry}
               />
 
-              <SuperAdminNavTabs activeTab={activeTab} onChangeTab={handleTabChange} />
+              {/* Navigation lives in the sidebar only. This heading exists purely
+                  so a deep-linked or refreshed page still says which of the seven
+                  sections is open, which the removed tab bar used to provide. */}
+              {activeMeta && (
+                <div className="pt-1">
+                  <h2 className="text-lg font-bold tracking-tight text-slate-900">
+                    {activeMeta.label}
+                  </h2>
+                  <p className="text-sm text-slate-500 mt-0.5">{activeMeta.description}</p>
+                </div>
+              )}
 
               <AnimatePresence mode="wait">
                 <motion.div
@@ -143,12 +152,6 @@ function SuperAdminDashboardContent() {
                   )}
                 </motion.div>
               </AnimatePresence>
-
-              {activeMeta && (
-                <p className="text-center text-[11px] text-slate-300 pt-2">
-                  {activeMeta.label} — {activeMeta.description}
-                </p>
-              )}
             </div>
           </DashboardLayout>
         );

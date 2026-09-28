@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAuthSession, apiLogout, UserSession } from "@/utils/auth";
+import { SUPER_ADMIN_TABS } from "@/components/super-admin/types";
 
 interface NavItem {
   label: string;
@@ -93,31 +94,19 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
   if (norm.includes("admin")) {
     return [
       {
-        title: "Platform Overview",
-        items: [
-          { label: "Overview & Sandbox", href: "/dashboard/super-admin", icon: "dashboard" },
-          { label: "Organisations", href: "/dashboard/super-admin?tab=organisations", icon: "corporate_fare" },
-          { label: "Global People", href: "/dashboard/super-admin?tab=users", icon: "group" },
-          { label: "Progress Oversight", href: "/dashboard/super-admin?tab=progress", icon: "monitoring" },
-          { label: "Google Calendar", href: "/dashboard/super-admin?tab=calendar", icon: "calendar_month" },
-        ],
-      },
-      {
-        title: "Security & Governance",
-        items: [
-          { label: "Access Control", href: "/dashboard/super-admin?tab=roles", icon: "security" },
-          { label: "Audit Ledger", href: "/dashboard/super-admin?tab=audit", icon: "receipt_long" },
-          { label: "System Settings", href: "/dashboard/super-admin?tab=settings", icon: "settings" },
-          { label: "Profile & Keys", href: "/dashboard/super-admin?tab=profile", icon: "account_circle" },
-        ],
-      },
-      {
-        title: "Operations & Portals",
-        items: [
-          { label: "Portals View-As", href: "/dashboard/super-admin?tab=portals", icon: "switch_account" },
-          { label: "Teams & Gantt", href: "/dashboard/super-admin?tab=reports", icon: "insights" },
-          { label: "Alerts & Approvals", href: "/dashboard/super-admin?tab=notifications", icon: "notifications" },
-        ],
+        title: "System Administration",
+        // Derived from the dashboard's own tab list, so the sidebar can never
+        // point at a page that no longer exists. Overview deliberately keeps a
+        // query-less href — that is what makes it the default route, and it is
+        // what the active-state check in the component keys on.
+        items: SUPER_ADMIN_TABS.map((tab) => ({
+          label: tab.label,
+          href:
+            tab.key === "overview"
+              ? "/dashboard/super-admin"
+              : `/dashboard/super-admin?tab=${tab.key}`,
+          icon: tab.icon,
+        })),
       },
     ];
   }

@@ -45,6 +45,16 @@ URL parameter and the page shell, so they cannot disagree about what pages exist
 New: `apiClient.ts`, `insightsService.ts`, `calendarService.ts`, `useAsyncData.ts`,
 `SuperAdminUi.tsx` (shared card/state/stat primitives).
 
+### Sidebar
+
+`Sidebar.tsx` had 12 superuser links across 3 sections, 7 of which pointed at
+tabs that no longer existed (`organisations`, `roles`, `audit`, `settings`,
+`portals`, `reports`, `notifications`). It now derives its items from
+`SUPER_ADMIN_TABS`, so the sidebar and the dashboard can never disagree about
+which pages exist. Stale labels went with it — "Overview & Sandbox" → Overview
+(the sandbox was mock-only), "Google Calendar" → Microsoft Calendar, "Global
+People" → People, "Profile & Keys" → Profile.
+
 ### Removed — mock-only, no backend
 
 `mockData.ts`, `SuperuserSandboxBanner.tsx`, and the Organisations, Audit, Portals,
@@ -68,8 +78,9 @@ and "Create Organisation" button went with it.
 
 ## Verification
 
-- `npx tsc --noEmit --incremental false` → clean for all superuser code.
-- `npx next build` → passes; `/dashboard/super-admin` prerenders.
+- `npx tsc --noEmit --incremental false` → clean across the whole app.
+- `npx next build` → passes; `/dashboard/super-admin` and `/dashboard/manager`
+  both prerender.
 - `pytest` → **198 passed, 7 failed**. All 7 failures are pre-existing and live in
   files this work never touched (`test_manager_workflows.py` missing asyncio marker,
   `test_microsoft_auth.py` mock `StopIteration`, `test_superuser_students.py`
@@ -77,9 +88,15 @@ and "Create Organisation" button went with it.
 - New tests: `test_insights_service.py` (56), `test_microsoft_calendar.py` (24),
   `test_auth_profile_update.py` (17) — 97 tests over the new code.
 
-### Known pre-existing blocker (out of scope)
+## Cross-dashboard coupling: HR reuses PeopleTab
 
-`app/dashboard/manager/page.tsx` is missing its React imports and fails to compile,
-which blocks `next build` for the whole app. It is a different dashboard and was
-left untouched per the "modify only the superuser dashboard" constraint. Adding the
-missing `useState`/`useEffect`/`useCallback` imports would unblock the build.
+`app/dashboard/hr/page.tsx` imports the superuser's `PeopleTab` and passed it the
+old `users` / `isLoading` / `onRefreshUsers` / `onSimulate` props, plus
+`fetchAdminUsers` and `UserDirectoryRecord` — all removed when the directory was
+rewritten to be self-fetching. That broke the HR dashboard, so it was updated too:
+
+- `onOpenAddPerson` is now optional; when absent the Add Person actions are hidden
+  rather than linked to a superuser-only route.
+- New optional `onDirectoryLoaded` callback lets the HR headcount card reuse
+  PeopleTab's single fetch instead of issuing a duplicate request. The card shows
+  `—` until loaded rather than a misleading `0`.

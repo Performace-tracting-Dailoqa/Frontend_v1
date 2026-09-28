@@ -4,30 +4,16 @@ import React, { useState, useEffect } from "react";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import PeopleTab from "@/components/super-admin/tabs/PeopleTab";
-import { fetchAdminUsers } from "@/services/adminService";
-import { UserDirectoryRecord } from "@/components/super-admin/types";
 
 export default function HRDashboardPage() {
   const [activeTab, setActiveTab] = useState<"employees" | "cycles" | "evaluations" | "analytics" | "reports" | "notifications">("employees");
-  const [users, setUsers] = useState<UserDirectoryRecord[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
 
-  const loadUsers = async () => {
-    try {
-      setIsLoading(true);
-      const data = await fetchAdminUsers();
-      if (data) {
-        setUsers(data);
-      }
-    } catch (err) {
-      console.warn("Failed to load users in HR dashboard:", err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  // Populated by PeopleTab's own fetch, so the headcount card and the directory
+  // always agree without a second round-trip. Null means "not loaded yet", which
+  // renders as a dash rather than a misleading zero.
+  const [personnelCount, setPersonnelCount] = useState<number | null>(null);
 
   useEffect(() => {
-    loadUsers();
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
       if (hash && ["employees", "cycles", "evaluations", "analytics", "reports", "notifications"].includes(hash)) {
@@ -149,7 +135,9 @@ export default function HRDashboardPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Total Personnel</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">{users.length} Enrolled</p>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
+                    {personnelCount === null ? "—" : personnelCount} Enrolled
+                  </p>
                   <p className="text-[11px] text-outline mt-1">Live database records</p>
                 </div>
 
@@ -181,12 +169,9 @@ export default function HRDashboardPage() {
                       Manage HR, Managers, Teachers, and Learners across the organization.
                     </p>
                   </div>
-                  <PeopleTab
-                    users={users}
-                    isLoading={isLoading}
-                    onRefreshUsers={loadUsers}
-                    onSimulate={() => {}}
-                  />
+                  {/* The directory loads and paginates itself, so HR gets the same
+                      live data as the superuser without owning any fetch state. */}
+                  <PeopleTab onDirectoryLoaded={(loaded) => setPersonnelCount(loaded.length)} />
                 </div>
               ) : (
                 <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">

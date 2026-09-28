@@ -25,7 +25,20 @@ import {
 } from "../SuperAdminUi";
 
 interface PeopleTabProps {
-  onOpenAddPerson: () => void;
+  /**
+   * Opens the Add Person flow. Optional because this directory is shared with the
+   * HR dashboard, which has no provisioning page of its own — when it is omitted
+   * the "Add Person" actions are hidden rather than linked to a route that would
+   * bounce the user out of their dashboard.
+   */
+  onOpenAddPerson?: () => void;
+
+  /**
+   * Reports the directory after every load, so an embedding page (the HR
+   * dashboard's headcount card) can share this fetch instead of issuing a second
+   * identical request just to derive a number.
+   */
+  onDirectoryLoaded?: (people: DirectoryPerson[]) => void;
 }
 
 /** Display metadata for the four role buckets the People page groups by. */
@@ -55,7 +68,7 @@ function matchesSearch(person: DirectoryPerson, needle: string): boolean {
     .some((value) => value.toLowerCase().includes(needle));
 }
 
-export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
+export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: PeopleTabProps) {
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
   const [failedRoles, setFailedRoles] = useState<DirectoryRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -67,6 +80,12 @@ export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // `load` is memoised with no dependencies, so the notify callback is held in a
+  // ref. That lets a parent pass a fresh inline function every render without
+  // re-running the initial fetch.
+  const notifyRef = React.useRef(onDirectoryLoaded);
+  notifyRef.current = onDirectoryLoaded;
+
   const load = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
@@ -74,6 +93,7 @@ export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
       const { people: loaded, failedRoles: failed } = await fetchDirectory();
       setPeople(loaded);
       setFailedRoles(failed);
+      notifyRef.current?.(loaded);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "Could not load the people directory.");
     } finally {
@@ -119,6 +139,7 @@ export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
       const { people: fresh, failedRoles: failed } = await fetchDirectory();
       setPeople(fresh);
       setFailedRoles(failed);
+      notifyRef.current?.(fresh);
       setSelected((current) => {
         if (!current || current.profileId !== person.profileId) return current;
         return fresh.find((entry) => entry.profileId === person.profileId) ?? current;
@@ -199,9 +220,11 @@ export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
                 { value: "inactive", label: "Deactivated" },
               ]}
             />
-            <PrimaryButton onClick={onOpenAddPerson} icon="person_add">
-              Add Person
-            </PrimaryButton>
+            {onOpenAddPerson && (
+              <PrimaryButton onClick={onOpenAddPerson} icon="person_add">
+                Add Person
+              </PrimaryButton>
+            )}
           </div>
         }
       />
@@ -288,7 +311,7 @@ export default function PeopleTab({ onOpenAddPerson }: PeopleTabProps) {
                 : "Try a different search term, role or status."
             }
             action={
-              people.length === 0 ? (
+              people.length === 0 && onOpenAddPerson ? (
                 <PrimaryButton onClick={onOpenAddPerson} icon="person_add">
                   Add Person
                 </PrimaryButton>

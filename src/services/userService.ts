@@ -158,9 +158,30 @@ export async function deleteTeacher(id: string): Promise<void> {
 // the bucket "Intern / Learner" rather than inventing a second entity.
 // ---------------------------------------------------------------------------
 
-export async function fetchStudentList(page = 1, pageSize = 100, department?: string): Promise<UserListResponse<UserProfileResponse>> {
+export interface StudentListQuery {
+  page?: number;
+  pageSize?: number;
+  department?: string;
+  /** Narrows to one batch. Omit for every intern. */
+  batchId?: string;
+  status?: string;
+}
+
+/**
+ * Interns / learners, optionally narrowed to one batch.
+ *
+ * `pageSize` is clamped to 100, which is the endpoint's hard cap: asking for more
+ * is a 422, not a silent truncation, so a caller passing a large number would get
+ * an error rather than the page it asked for.
+ */
+export async function fetchStudentList(
+  query: StudentListQuery = {}
+): Promise<UserListResponse<UserProfileResponse>> {
+  const { page = 1, pageSize = 100, department, batchId, status } = query;
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (department) params.append("department", department);
+  if (batchId) params.append("batch_id", batchId);
+  if (status) params.append("status", status);
 
   const data = await apiJson<UserListResponse<UserProfileResponse>>(
     `/api/v1/students?${params.toString()}`,

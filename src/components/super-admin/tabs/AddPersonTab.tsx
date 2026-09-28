@@ -508,7 +508,11 @@ export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPers
                   ) : (
                     <>
                       <option value={NO_BATCH}>No batch (unassigned)</option>
-                      {batches.map((batch) => (
+                      {/* Optional-chained rather than `batches.map`: the branch is
+                          only reached when the list is non-empty, but that
+                          narrowing does not survive `(batches?.length ?? 0)`, so
+                          the compiler still sees `batches` as possibly null. */}
+                      {batches?.map((batch) => (
                         <option key={batch.id} value={batch.id}>
                           {batchLabel(batch)}
                         </option>

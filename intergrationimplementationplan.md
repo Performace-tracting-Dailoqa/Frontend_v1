@@ -38,15 +38,37 @@ URL parameter and the page shell, so they cannot disagree about what pages exist
 | Page | Backing call |
 | --- | --- |
 | Overview | `GET /superuser/overview` + `fetchSystemTelemetry` |
-| Teams | `GET /superuser/teams` |
+| Teams | `GET /superuser/teams`; the per-batch roster is `GET /students?batch_id=…` |
 | People | `fetchDirectory` → HR/manager/teacher/student list endpoints |
-| Progress | `GET /superuser/progress` |
+| Progress | `GET /superuser/progress` + `GET /superuser/progress/trend` |
 | Microsoft Calendar | `GET /microsoft/calendar/{status,events}` |
 | Add Person | `POST /{hr,managers,teachers,students}`, plus `GET`/`POST /batches` for the batch picker |
 | Profile | `GET`/`PUT /auth/me` |
 
-New: `apiClient.ts`, `insightsService.ts`, `calendarService.ts`, `useAsyncData.ts`,
-`SuperAdminUi.tsx` (shared card/state/stat primitives).
+New: `apiClient.ts`, `insightsService.ts`, `calendarService.ts`, `batchService.ts`,
+`useAsyncData.ts`, `utils/date.ts`, `SuperAdminUi.tsx` (shared card/state/stat
+primitives), `TrendChart.tsx`.
+
+### Team roster drill-down
+
+Clicking a batch on the Teams page opens its interns as a page of their own, with
+a back button. The headcount already on the roll-up could not answer "who is in
+this batch", so the roster is a separate call: `batchService.fetchAllBatchLearners`
+pages `GET /api/v1/students?batch_id=…` to the end rather than taking the first
+100, then the page filters and paginates on the client so the search box does not
+refetch per keystroke.
+
+Two backend facts this depends on, both bugs that were fixed to make it work:
+
+- `batch_id`, `department` and `status` were accepted by the students listing and
+  then **never applied** — the page was taken from `users`, which has none of those
+  columns. Every batch therefore returned the same full roster. `list_student_profiles`
+  now pages over the `students` profile table and joins `users` for identity, which
+  also makes `total` and the page slice consistent.
+- The `roles` table holds both `Student` and `student`, differing only in case, and
+  seeded interns are split across the two. Resolving one role by exact name matched
+  only some of them, so the listing now does not narrow by role at all: a learner
+  is a learner because a profile row exists.
 
 ### Sidebar
 
@@ -91,12 +113,18 @@ and "Create Organisation" button went with it.
 - `npx tsc --noEmit --incremental false` → clean across the whole app.
 - `npx next build` → passes; `/dashboard/super-admin` and `/dashboard/manager`
   both prerender.
-- `pytest` → **198 passed, 7 failed**. All 7 failures are pre-existing and live in
-  files this work never touched (`test_manager_workflows.py` missing asyncio marker,
-  `test_microsoft_auth.py` mock `StopIteration`, `test_superuser_students.py`
-  query-shape mismatch).
+- `pytest` → **270 passed, 2 failed** (was 198/7 when this plan was first written).
+  Both remaining failures are pre-existing and unrelated to any page here:
+  `test_auth_password_change.py::test_successful_password_change_persists_must_change_password_false`
+  and `test_manager_workflows.py::test_get_manager_team`.
+  `test_superuser_students.py::test_list_students` used to be on that list as a
+  "query-shape mismatch" — it was not a bad mock, it was a mock faithfully
+  describing a *correct* implementation that had since been regressed. It now
+  drives a fake that really applies filters and really pages, and passes.
 - New tests: `test_insights_service.py` (56), `test_microsoft_calendar.py` (24),
-  `test_auth_profile_update.py` (17) — 97 tests over the new code.
+  `test_auth_profile_update.py` (17) — 97 tests over the new code. Later additions:
+  `test_insights_trend.py` (40), `test_superuser_batches.py` (13), and 15 listing
+  tests in `test_superuser_students.py` covering the batch filter.
 
 ## Cross-dashboard coupling: HR reuses PeopleTab
 

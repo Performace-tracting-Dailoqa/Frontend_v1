@@ -45,8 +45,18 @@ export default function DashboardLayout({
         onToggleCollapse={handleToggleCollapse}
       />
 
-      {/* Main Content Area */}
-      <div className="flex-1 flex flex-col min-w-0 transition-all duration-300">
+      {/* Main Content Area — the left padding reserves the width of the pinned
+          Sidebar, which is `fixed` at every breakpoint and so no longer takes up
+          space in this flex row. These values must match the aside's widths
+          (w-72 expanded, lg:w-20 collapsed) or the content will sit under it.
+          Same approach as app/student/layout.tsx. `transition-all` is what
+          animates the reserved width in step with the sidebar's own width
+          transition. */}
+      <div
+        className={`flex-1 flex flex-col min-w-0 transition-all duration-300 ${
+          isCollapsed ? "lg:pl-20" : "lg:pl-72"
+        }`}
+      >
         <Header onMenuToggle={() => setSidebarOpen(true)} />
         <main className="flex-1 p-4 lg:p-8 overflow-y-auto">
           {children}

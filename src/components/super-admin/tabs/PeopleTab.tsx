@@ -68,6 +68,37 @@ function matchesSearch(person: DirectoryPerson, needle: string): boolean {
     .some((value) => value.toLowerCase().includes(needle));
 }
 
+/** Directory rows rendered per page. */
+const PAGE_SIZE = 10;
+
+/**
+ * Page numbers to render, with `null` standing in for an ellipsis.
+ *
+ * The first and last page are always shown, plus `span` neighbours on each side
+ * of the current one. Pinning both ends keeps the control the same width as you
+ * page through a long directory, instead of the buttons reflowing every click.
+ */
+function paginationItems(current: number, total: number, span = 1): Array<number | null> {
+  if (total <= 0) return [];
+  if (total === 1) return [1];
+
+  const wanted = new Set<number>([1, total, current]);
+  for (let offset = 1; offset <= span; offset += 1) {
+    if (current - offset >= 1) wanted.add(current - offset);
+    if (current + offset <= total) wanted.add(current + offset);
+  }
+
+  const pages = [...wanted].sort((a, b) => a - b);
+  const items: Array<number | null> = [];
+  let previous = 0;
+  for (const page of pages) {
+    if (previous && page - previous > 1) items.push(null);
+    items.push(page);
+    previous = page;
+  }
+  return items;
+}
+
 export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: PeopleTabProps) {
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
   const [failedRoles, setFailedRoles] = useState<DirectoryRole[]>([]);
@@ -76,6 +107,7 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
   const [search, setSearch] = useState("");
   const [roleFilter, setRoleFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
   const [selected, setSelected] = useState<DirectoryPerson | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
@@ -115,6 +147,38 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
       return true;
     });
   }, [people, search, roleFilter, statusFilter]);
+
+  // Changing what is being looked at invalidates the page number: a reader on
+  // page 7 who narrows the search should see the top of the new results, not an
+  // empty page 7 with no obvious way back.
+  //
+  // Done while rendering rather than in an effect, per React's "adjust state when
+  // a prop changes" guidance — the page is derived from these filters, so it is
+  // corrected in the same render that changes them, with no second pass. The key
+  // is compared rather than the three values watched separately so a filter that
+  // happens to keep the same page count still resets.
+  const filterKey = `${search}\u0000${roleFilter}\u0000${statusFilter}`;
+  const [pageForFilters, setPageForFilters] = useState(filterKey);
+  if (pageForFilters !== filterKey) {
+    setPageForFilters(filterKey);
+    setPage(1);
+  }
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+
+  // Clamp rather than trust `page`. Deactivating or refreshing a person can
+  // shrink the directory under the reader's feet, and an out-of-range page would
+  // otherwise render as a blank table that looks like a failed load.
+  const currentPage = Math.min(page, totalPages);
+
+  const visible = useMemo(
+    () => filtered.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE),
+    [filtered, currentPage]
+  );
+
+  const firstRow = filtered.length === 0 ? 0 : (currentPage - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(currentPage * PAGE_SIZE, filtered.length);
+  const pageItems = paginationItems(currentPage, totalPages);
 
   const counts = useMemo(() => {
     const base: Record<DirectoryRole, number> = {
@@ -319,91 +383,153 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
             }
           />
         ) : (
-          <div className="overflow-x-auto -mx-5 -mb-5">
-            <table className="w-full text-left text-xs min-w-[840px]">
-              <thead>
-                <tr className="bg-slate-50/80 border-y border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider">
-                  <th className="py-3 px-5 font-semibold">Person</th>
-                  <th className="py-3 px-4 font-semibold">Role</th>
-                  <th className="py-3 px-4 font-semibold">Department</th>
-                  <th className="py-3 px-4 font-semibold">Identifier</th>
-                  <th className="py-3 px-4 font-semibold">Status</th>
-                  <th className="py-3 px-4 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {filtered.map((person) => {
-                  const isPending = pendingId === person.profileId;
-                  const identifier = person.enrollmentNo ?? person.specialization;
+          <>
+            <div className="overflow-x-auto -mx-5">
+              <table className="w-full text-left text-xs min-w-[840px]">
+                <thead>
+                  <tr className="bg-slate-50/80 border-y border-slate-200/80 text-slate-500 font-bold uppercase tracking-wider">
+                    <th className="py-3 px-5 font-semibold">Person</th>
+                    <th className="py-3 px-4 font-semibold">Role</th>
+                    <th className="py-3 px-4 font-semibold">Department</th>
+                    <th className="py-3 px-4 font-semibold">Identifier</th>
+                    <th className="py-3 px-4 font-semibold">Status</th>
+                    <th className="py-3 px-4 text-right font-semibold">Actions</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {visible.map((person) => {
+                    const isPending = pendingId === person.profileId;
+                    const identifier = person.enrollmentNo ?? person.specialization;
 
-                  return (
-                    <tr key={`${person.role}-${person.profileId}`} className="hover:bg-slate-50/70 transition-colors">
-                      <td className="py-3 px-5">
-                        <button
-                          type="button"
-                          onClick={() => setSelected(person)}
-                          className="flex items-center gap-3 text-left cursor-pointer"
-                        >
-                          <Avatar name={person.name} />
-                          <span className="min-w-0">
-                            <span className="font-bold text-slate-900 hover:text-primary transition-colors block truncate">
-                              {person.name}
+                    return (
+                      <tr key={`${person.role}-${person.profileId}`} className="hover:bg-slate-50/70 transition-colors">
+                        <td className="py-3 px-5">
+                          <button
+                            type="button"
+                            onClick={() => setSelected(person)}
+                            className="flex items-center gap-3 text-left cursor-pointer"
+                          >
+                            <Avatar name={person.name} />
+                            <span className="min-w-0">
+                              <span className="font-bold text-slate-900 hover:text-primary transition-colors block truncate">
+                                {person.name}
+                              </span>
+                              <span className="font-mono text-[11px] text-slate-400 block truncate">
+                                {person.email}
+                              </span>
                             </span>
-                            <span className="font-mono text-[11px] text-slate-400 block truncate">
-                              {person.email}
-                            </span>
-                          </span>
-                        </button>
-                      </td>
+                          </button>
+                        </td>
 
-                      <td className="py-3 px-4">
-                        <Pill tone={ROLE_META[person.role].pill}>{ROLE_META[person.role].label}</Pill>
-                      </td>
+                        <td className="py-3 px-4">
+                          <Pill tone={ROLE_META[person.role].pill}>{ROLE_META[person.role].label}</Pill>
+                        </td>
 
-                      <td className="py-3 px-4 text-slate-700 font-medium">
-                        {person.department ?? <span className="text-slate-300">—</span>}
-                      </td>
+                        <td className="py-3 px-4 text-slate-700 font-medium">
+                          {person.department ?? <span className="text-slate-300">—</span>}
+                        </td>
 
-                      <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
-                        {identifier ?? <span className="text-slate-300 font-sans">—</span>}
-                      </td>
+                        <td className="py-3 px-4 font-mono text-[11px] text-slate-500">
+                          {identifier ?? <span className="text-slate-300 font-sans">—</span>}
+                        </td>
 
-                      <td className="py-3 px-4">
-                        <StatusDot isActive={person.isActive} />
-                      </td>
+                        <td className="py-3 px-4">
+                          <StatusDot isActive={person.isActive} />
+                        </td>
 
-                      <td className="py-3 px-4 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          {isPending ? (
-                            <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                          ) : (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => handleToggleActive(person)}
-                                className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
-                              >
-                                {person.isActive ? "Suspend" : "Activate"}
-                              </button>
-                              {person.isActive && (
+                        <td className="py-3 px-4 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            {isPending ? (
+                              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                            ) : (
+                              <>
                                 <button
                                   type="button"
-                                  onClick={() => handleDeactivate(person)}
-                                  className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                                  onClick={() => handleToggleActive(person)}
+                                  className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11px] font-semibold transition-colors cursor-pointer"
                                 >
-                                  Deactivate
+                                  {person.isActive ? "Suspend" : "Activate"}
                                 </button>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                                {person.isActive && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDeactivate(person)}
+                                    className="px-2.5 py-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-semibold transition-colors cursor-pointer"
+                                  >
+                                    Deactivate
+                                  </button>
+                                )}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {totalPages > 1 && (
+              <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                <p className="text-[11px] font-semibold text-slate-500">
+                  Showing{" "}
+                  <span className="text-slate-800">
+                    {`${firstRow}–${lastRow}`}
+                  </span>{" "}
+                  of {filtered.length}
+                </p>
+
+                <nav aria-label="Directory pages" className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => setPage(currentPage - 1)}
+                    disabled={currentPage === 1}
+                    aria-label="Previous page"
+                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <span className="material-symbols-outlined text-base">chevron_left</span>
+                  </button>
+
+                  {pageItems.map((item, index) =>
+                    item === null ? (
+                      <span
+                        key={`gap-${index}`}
+                        aria-hidden="true"
+                        className="px-1 text-[11px] font-bold text-slate-400"
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setPage(item)}
+                        aria-current={item === currentPage ? "page" : undefined}
+                        className={`h-8 min-w-8 px-2 rounded-lg text-[11px] font-bold transition-colors cursor-pointer ${
+                          item === currentPage
+                            ? "bg-[#4B2EF5] text-white"
+                            : "bg-slate-100 hover:bg-slate-200 text-slate-700"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+
+                  <button
+                    type="button"
+                    onClick={() => setPage(currentPage + 1)}
+                    disabled={currentPage === totalPages}
+                    aria-label="Next page"
+                    className="h-8 w-8 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition-colors cursor-pointer disabled:opacity-40 disabled:pointer-events-none"
+                  >
+                    <span className="material-symbols-outlined text-base">chevron_right</span>
+                  </button>
+                </nav>
+              </div>
+            )}
+          </>
         )}
       </SectionCard>
 

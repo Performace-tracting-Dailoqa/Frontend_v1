@@ -192,6 +192,82 @@ export function fetchSuperuserProgress(query: ProgressQuery = {}): Promise<Super
   );
 }
 
+/**
+ * One day of a trend line.
+ *
+ * `average_percentage` is `null` when no evaluations were recorded that day, so
+ * the chart draws a gap rather than dropping to 0%. A day nobody was evaluated
+ * is missing data, not a score of zero.
+ */
+export interface TrendPoint {
+  date: string;
+  average_percentage: number | null;
+  evaluations: number;
+}
+
+/**
+ * One batch in the chart's display order, whether or not it is currently plotted.
+ *
+ * The response carries the full catalogue even when `series` is narrowed, which
+ * is what lets the filter list every batch and keeps a batch's colour fixed
+ * while other batches are toggled off.
+ */
+export interface TrendBatch {
+  batch_id: string;
+  batch_name: string;
+  /** Stable slot in the chart's palette; independent of the active filter. */
+  series_index: number;
+}
+
+export interface TrendSeries extends TrendBatch {
+  points: TrendPoint[];
+}
+
+export interface SuperuserProgressTrend {
+  generated_at: string;
+  days: number;
+  start_date: string;
+  end_date: string;
+  /** Every batch, in display order — the filter's full list of choices. */
+  batches: TrendBatch[];
+  series: TrendSeries[];
+  /**
+   * Cross-batch daily mean — the mean of the per-batch means, so a 40-learner
+   * batch cannot outvote a 5-learner one. Covers the *selected* batches, so it
+   * moves with the filter.
+   */
+  average: TrendPoint[];
+}
+
+export interface ProgressTrendQuery {
+  days?: number;
+  /** Omit or pass an empty list for every batch. */
+  batchIds?: string[];
+}
+
+/**
+ * Daily average evaluation score per batch, for the Progress trend chart.
+ *
+ * Kept separate from `fetchSuperuserProgress` because that call is refetched on
+ * every keystroke of the search box, and the chart's batch selection is
+ * independent of the table's sort and status filters.
+ */
+export function fetchSuperuserProgressTrend(
+  query: ProgressTrendQuery = {}
+): Promise<SuperuserProgressTrend> {
+  const { days = 30, batchIds } = query;
+  const params = new URLSearchParams({ days: String(days) });
+  for (const id of batchIds ?? []) {
+    params.append("batch_ids", id);
+  }
+
+  return apiJson<SuperuserProgressTrend>(
+    `/api/v1/superuser/progress/trend?${params.toString()}`,
+    { cache: "no-store" },
+    "Could not load the daily progress trend"
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Shared UI helpers
 // ---------------------------------------------------------------------------

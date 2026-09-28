@@ -5,11 +5,15 @@ import { motion } from "framer-motion";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import {
   fetchSuperuserProgress,
+  fetchSuperuserProgressTrend,
   isPermissionError,
   ProgressSortKey,
   SuperuserProgress,
+  SuperuserProgressTrend,
   TeamRecord,
+  TrendBatch,
 } from "@/services/insightsService";
+import TrendChart, { trendSeriesColor } from "../TrendChart";
 import {
   EmptyState,
   ErrorState,
@@ -30,6 +34,19 @@ const SORT_OPTIONS: Array<{ value: ProgressSortKey; label: string }> = [
   { value: "overdue", label: "Sort: Overdue Tasks" },
   { value: "learners", label: "Sort: Headcount" },
   { value: "name", label: "Sort: Name" },
+];
+
+/**
+ * Trend window choices, all inside the 7-365 range the endpoint accepts.
+ *
+ * 30 days is the default: long enough for a trend to be a trend, short enough
+ * that individual evaluation days are still identifiable.
+ */
+const TREND_WINDOW_OPTIONS = [
+  { value: "7", label: "Last 7 days" },
+  { value: "14", label: "Last 14 days" },
+  { value: "30", label: "Last 30 days" },
+  { value: "90", label: "Last 90 days" },
 ];
 
 function formatScore(value: number | null): string {
@@ -59,6 +76,86 @@ const ATTENTION_COPY: Record<
   good: { label: "On track", tone: "emerald" },
   idle: { label: "No tasks yet", tone: "slate" },
 };
+
+/**
+ * Multi-select for the trend chart's batch lines.
+ *
+ * Each chip is a toggle carrying the same colour swatch the line it controls is
+ * drawn in, so the mapping is obvious at a glance.
+ *
+ * An empty selection means "every batch" -- the same thing the API means by an
+ * omitted filter, and why the chips read as all-on in that state. That alias is
+ * also why the last remaining chip cannot be switched off: with nothing left to
+ * plot there would be no chart, and no way back from an empty selection. So the
+ * final chip is disabled rather than silently reinterpreting itself as "all".
+ */
+function BatchFilter({
+  batches,
+  selected,
+  onToggle,
+  onShowAll,
+}: {
+  batches: TrendBatch[];
+  selected: string[];
+  onToggle: (batchId: string) => void;
+  onShowAll: () => void;
+}) {
+  const everyBatchShown = selected.length === 0;
+  const lastOneShown = everyBatchShown ? null : selected.length === 1 ? selected[0] : null;
+  const shownCount = everyBatchShown ? batches.length : selected.length;
+
+  if (batches.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <span className="text-[10px] font-bold uppercase tracking-wide text-slate-400">Batches</span>
+
+      {batches.map((batch) => {
+        const on = everyBatchShown || selected.includes(batch.batch_id);
+        const locked = on && batch.batch_id === lastOneShown;
+        return (
+          <button
+            key={batch.batch_id}
+            type="button"
+            aria-pressed={on}
+            disabled={locked}
+            onClick={() => onToggle(batch.batch_id)}
+            title={locked ? "The chart always keeps at least one batch" : undefined}
+            className={`flex items-center gap-1.5 rounded-xl border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+              locked
+                ? "cursor-not-allowed border-primary/30 bg-primary/5 text-slate-900 opacity-60"
+                : on
+                  ? "cursor-pointer border-primary/30 bg-primary/5 text-slate-900 hover:bg-primary/10"
+                  : "cursor-pointer border-slate-200 bg-white text-slate-400 hover:bg-slate-50"
+            }`}
+          >
+            <span
+              className="h-2 w-2 shrink-0 rounded-full"
+              style={{
+                backgroundColor: trendSeriesColor(batch.series_index),
+                opacity: on ? 1 : 0.3,
+              }}
+            />
+            {batch.batch_name}
+          </button>
+        );
+      })}
+
+      <button
+        type="button"
+        onClick={onShowAll}
+        disabled={everyBatchShown}
+        className="rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-500 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-white"
+      >
+        Show all
+      </button>
+
+      <span className="ml-auto text-[11px] text-slate-400">
+        {shownCount} of {batches.length} plotted
+      </span>
+    </div>
+  );
+}
 
 function TeamProgressRow({ team }: { team: TeamRecord }) {
   const [expanded, setExpanded] = useState(false);
@@ -178,6 +275,54 @@ export default function ProgressTab() {
     [search, status, sortBy],
     { toMessage: (caught) => (caught instanceof Error ? caught.message : String(caught)) }
   );
+
+  // The trend is fetched on its own, with its own request. Sharing the roll-up's
+  // request would redraw the chart on every keystroke of the search box above,
+  // which has nothing to do with the chart's window or batch selection.
+  const [trendWindow, setTrendWindow] = useState(30);
+  // Empty means "every batch". `toggleTrendBatch` keeps this in catalogue order,
+  // so the joined string below is a faithful key for the request: two selections
+  // holding the same batches always produce the same key, and therefore the same
+  // request, no matter which order the user arrived at them in.
+  const [selectedBatches, setSelectedBatches] = useState<string[]>([]);
+  const selectedBatchKey = selectedBatches.join(",");
+
+  const {
+    data: trend,
+    isLoading: trendLoading,
+    isInitialLoading: trendInitialLoading,
+    error: trendError,
+    reload: reloadTrend,
+  } = useAsyncData<SuperuserProgressTrend>(
+    () => fetchSuperuserProgressTrend({ days: trendWindow, batchIds: selectedBatches }),
+    [trendWindow, selectedBatchKey],
+    { toMessage: (caught) => (caught instanceof Error ? caught.message : String(caught)) }
+  );
+
+  /**
+   * Adds or removes one batch from the plotted set.
+   *
+   * Operates on the *effective* set, so a toggle behaves the same whether the
+   * selection is empty (all batches) or explicit. Two canonicalisations keep the
+   * state a proper set rather than one state per ordering: selecting everything
+   * collapses to the empty selection, which means the same thing to the server,
+   * and the result is stored in catalogue order so toggling a batch off and back
+   * on does not refetch a chart identical to the one already on screen.
+   */
+  const toggleTrendBatch = (batchId: string) => {
+    const everyId = (trend?.batches ?? []).map((batch) => batch.batch_id);
+    const current = selectedBatches.length > 0 ? selectedBatches : everyId;
+    const next = current.includes(batchId)
+      ? current.filter((id) => id !== batchId)
+      : [...current, batchId];
+
+    // The chart has to have a line to draw; the last chip is disabled for this.
+    if (next.length === 0) return;
+
+    // Filtering by the catalogue also drops any id that no longer exists.
+    const ordered = everyId.filter((id) => next.includes(id));
+    setSelectedBatches(ordered.length === everyId.length ? [] : ordered);
+  };
 
   if (isInitialLoading) {
     return <LoadingState label="Calculating team progress…" />;
@@ -313,6 +458,47 @@ export default function ProgressTab() {
           tone={data.teams_needing_attention > 0 ? "amber" : "slate"}
         />
       </div>
+
+      <SectionCard
+        title="Daily average progress"
+        subtitle="Mean evaluation score per day, one line per batch. A break in a line is a day with no evaluations, not a score of zero."
+        icon="show_chart"
+        action={
+          <div className="flex items-center gap-2">
+            {trendLoading && !trendInitialLoading && (
+              <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+            )}
+            <Select
+              ariaLabel="Trend time window"
+              value={String(trendWindow)}
+              onChange={(value) => setTrendWindow(Number(value))}
+              options={TREND_WINDOW_OPTIONS}
+            />
+          </div>
+        }
+      >
+        {trendInitialLoading ? (
+          <LoadingState label="Loading the daily trend…" compact />
+        ) : trendError ? (
+          <ErrorState
+            title="Could not load the daily trend"
+            message={trendError}
+            onRetry={reloadTrend}
+          />
+        ) : !trend ? null : (
+          <>
+            <BatchFilter
+              batches={trend.batches}
+              selected={selectedBatches}
+              onToggle={toggleTrendBatch}
+              onShowAll={() => setSelectedBatches([])}
+            />
+            <div className="mt-4">
+              <TrendChart series={trend.series} average={trend.average} />
+            </div>
+          </>
+        )}
+      </SectionCard>
 
       <SectionCard title="Overall completion" subtitle="Every workflow task across all batches" icon="donut_large">
         <ProgressBar value={data.overall.completion_percentage} />

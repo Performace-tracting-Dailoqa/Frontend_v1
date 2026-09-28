@@ -140,7 +140,7 @@ export function isUserLoggedIn(): boolean {
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
-  window.location.assign("/api/auth/microsoft");
+  window.location.href = "/api/auth/microsoft";
 }
 
 export function getLoginErrorMessage(code?: string | null): string {
@@ -166,7 +166,7 @@ export function getRoleDashboardPath(roleName?: string | null): string {
   if (normalized.includes("student") || normalized.includes("employee") || normalized.includes("trainee")) {
     return "/student/dashboard";
   }
-  if (normalized.includes("teacher") || normalized.includes("mentor") || normalized.includes("instructor")) {
+  if (normalized.includes("teacher") || normalized.includes("mentor")) {
     return "/dashboard/teacher";
   }
   if (normalized.includes("manager")) {

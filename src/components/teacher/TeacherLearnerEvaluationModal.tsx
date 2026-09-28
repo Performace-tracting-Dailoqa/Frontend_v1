@@ -29,11 +29,7 @@ export default function TeacherLearnerEvaluationModal({ student, onClose }: Teac
   const [newMetricName, setNewMetricName] = useState("");
   const [newMetricScore, setNewMetricScore] = useState("");
 
-  useEffect(() => {
-    loadEvaluation();
-  }, [student.id]);
-
-  const loadEvaluation = async () => {
+  const loadEvaluation = React.useCallback(async () => {
     setIsLoading(true);
     setError(null);
     try {
@@ -46,12 +42,17 @@ export default function TeacherLearnerEvaluationModal({ student, onClose }: Teac
         evalData.metrics = [];
       }
       setEvaluation(evalData);
-    } catch (err: any) {
-      setError(err.message || "Failed to load evaluation");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to load evaluation");
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [student.id]);
+
+  useEffect(() => {
+    loadEvaluation();
+  }, [student.id, loadEvaluation]);
+  // Removed loadEvaluation from here
 
   const handleAddMetric = async () => {
     if (!evaluation || !newMetricName.trim()) return;
@@ -69,8 +70,8 @@ export default function TeacherLearnerEvaluationModal({ student, onClose }: Teac
       setIsAddingMetric(false);
       setNewMetricName("");
       setNewMetricScore("");
-    } catch (err: any) {
-      setError(err.message || "Failed to add metric");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to add metric");
     } finally {
       setIsSaving(false);
     }
@@ -85,8 +86,8 @@ export default function TeacherLearnerEvaluationModal({ student, onClose }: Teac
         ...prev,
         metrics: prev.metrics.filter(m => m.id !== metricId)
       } : prev);
-    } catch (err: any) {
-      setError(err.message || "Failed to delete metric");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to delete metric");
     } finally {
       setIsSaving(false);
     }
@@ -98,8 +99,8 @@ export default function TeacherLearnerEvaluationModal({ student, onClose }: Teac
     try {
       const updated = await updateGeneralEvaluation(student.id, evaluation.id, { remarks });
       setEvaluation(prev => prev ? { ...prev, remarks: updated.remarks } : prev);
-    } catch (err: any) {
-      setError(err.message || "Failed to update remarks");
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : "Failed to update remarks");
     } finally {
       setIsSaving(false);
     }

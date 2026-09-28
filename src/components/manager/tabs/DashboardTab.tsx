@@ -4,31 +4,19 @@ import React from "react";
 
 export default function DashboardTab() {
   return (
-    <div>
-      <h3 className="text-title-lg font-headline font-bold text-on-surface mb-6">Manager Overview</h3>
-      <div className="grid md:grid-cols-2 gap-6">
-        <div className="p-5 border border-outline-variant/40 rounded-xl bg-surface-container-lowest">
-          <h4 className="font-bold mb-4 text-on-surface">Recent Team Activity</h4>
-          <ul className="space-y-3">
-            <li className="flex items-center gap-3 text-sm">
-              <div className="w-2 h-2 rounded-full bg-emerald-500" />
-              <span className="text-on-surface">Alice completed onboarding workflow</span>
-            </li>
-            <li className="flex items-center gap-3 text-sm">
-              <div className="w-2 h-2 rounded-full bg-[#4B2EF5]" />
-              <span className="text-on-surface">Bob submitted weekly update</span>
-            </li>
-            <li className="flex items-center gap-3 text-sm">
-              <div className="w-2 h-2 rounded-full bg-amber-500" />
-              <span className="text-on-surface">Charlie has a pending review</span>
-            </li>
-          </ul>
-        </div>
-        <div className="p-5 border border-outline-variant/40 rounded-xl bg-surface-container-lowest flex flex-col justify-center items-center text-center">
-          <span className="material-symbols-outlined text-4xl text-emerald-500 mb-2">task_alt</span>
-          <h4 className="font-bold text-on-surface">Team Productivity</h4>
-          <p className="text-sm text-on-surface-variant mt-2">Your team is performing 15% better than last month across all assigned workflows.</p>
-        </div>
+    <div className="text-center py-12 border border-dashed border-outline-variant/60 rounded-xl bg-surface-container-lowest">
+      <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+        <span className="material-symbols-outlined text-3xl">api</span>
+      </div>
+      <h3 className="text-title-lg font-headline font-bold text-on-surface">
+        Manager Overview Dashboard
+      </h3>
+      <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2 mb-4">
+        Backend Developer: Integrate manager dashboard summary here.
+      </p>
+      <div className="inline-flex flex-col gap-2 text-left bg-surface-container p-4 rounded-lg border border-outline-variant/40">
+        <code className="text-xs text-on-surface-variant font-mono">GET /api/v1/manager/dashboard-summary</code>
+        <span className="text-xs text-outline mt-1 block">Expected data: Team activity logs and productivity metrics.</span>
       </div>
     </div>
   );

@@ -9,33 +9,20 @@ export default function EmployeesTab() {
         <h3 className="text-title-lg font-headline font-bold text-on-surface">Employee Directory</h3>
         <button className="bg-[#4B2EF5] text-white px-4 py-2 rounded-lg text-sm font-medium cursor-pointer shadow-sm hover:bg-[#4B2EF5]/90 transition-colors">Add Employee</button>
       </div>
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm">
-          <thead className="bg-surface-container text-on-surface-variant font-medium">
-            <tr>
-              <th className="px-4 py-3 rounded-tl-lg">Name</th>
-              <th className="px-4 py-3">Department</th>
-              <th className="px-4 py-3">Role</th>
-              <th className="px-4 py-3">Status</th>
-              <th className="px-4 py-3 rounded-tr-lg">Actions</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-outline-variant/30">
-            {[1, 2, 3, 4, 5].map((i) => (
-              <tr key={i} className="hover:bg-surface-container-low transition-colors">
-                <td className="px-4 py-3 font-medium text-on-surface">Employee {i}</td>
-                <td className="px-4 py-3 text-on-surface-variant">Engineering</td>
-                <td className="px-4 py-3 text-on-surface-variant">Developer</td>
-                <td className="px-4 py-3">
-                  <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md text-xs font-bold">Active</span>
-                </td>
-                <td className="px-4 py-3">
-                  <button className="text-[#4B2EF5] hover:underline font-medium cursor-pointer">View</button>
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      
+      <div className="text-center py-12 border border-dashed border-outline-variant/60 rounded-xl bg-surface-container-lowest">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+          <span className="material-symbols-outlined text-3xl">api</span>
+        </div>
+        <h4 className="text-title-md font-headline font-bold text-on-surface">Integration Required</h4>
+        <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2 mb-4">
+          Backend Developer: Integrate the employee directory API here.
+        </p>
+        <div className="inline-flex flex-col gap-2 text-left bg-surface-container p-4 rounded-lg border border-outline-variant/40">
+          <code className="text-xs text-on-surface-variant font-mono">GET /api/v1/hr/employees</code>
+          <code className="text-xs text-on-surface-variant font-mono">POST /api/v1/hr/employees (Add Employee)</code>
+          <span className="text-xs text-outline mt-1 block">Expected data: Array of UserDetails with department and role.</span>
+        </div>
       </div>
     </div>
   );

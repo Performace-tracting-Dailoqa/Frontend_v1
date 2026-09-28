@@ -1,11 +1,31 @@
 "use client";
 
-import React, { Suspense } from "react";
+import React, { Suspense, useState, useEffect, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ManagerTab } from "@/components/manager/types";
 import ManagerNavTabs from "@/components/manager/ManagerNavTabs";
+import {
+  Workflow,
+  WorkflowTask,
+  TeamMember,
+  fetchManagerTeam,
+  fetchWorkflows,
+  createWorkflow,
+  deleteWorkflow,
+  fetchWorkflowTasks,
+  createWorkflowTask,
+  deleteWorkflowTask,
+} from "@/services/workflowService";
+import {
+  WorkflowEvaluation,
+  fetchTaskEvaluation,
+  createEvaluation,
+  deleteEvaluation,
+  createEvaluationMetric,
+  deleteEvaluationMetric,
+} from "@/services/evaluationService";
 
 import DashboardTab from "@/components/manager/tabs/DashboardTab";
 import TeamTab from "@/components/manager/tabs/TeamTab";

@@ -10,10 +10,22 @@ export interface WorkflowMetric {
   full_score: number;
   weightage: number;
   score?: number | null;
+  student_score?: number | null;
   weighted_score?: number | null;
   remarks?: string | null;
+  student_remarks?: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface MetricSubmissionInput {
+  name: string;
+  description?: string | null;
+  score: number;
+  full_score: number;
+  student_score?: number | null;
+  weightage?: number | null;
+  remarks?: string | null;
 }
 
 export interface WorkflowEvaluation {
@@ -165,4 +177,26 @@ export async function deleteEvaluationMetric(
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.detail?.message || err?.detail || `Failed to delete metric (${res.status})`);
   }
+}
+
+export async function submitTaskEvaluation(
+  workflowId: string,
+  taskId: string,
+  payload: {
+    student_id: string;
+    metrics: MetricSubmissionInput[];
+    remarks?: string | null;
+    status?: string;
+  }
+): Promise<WorkflowEvaluation> {
+  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/submit`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to submit evaluation (${res.status})`);
+  }
+  return await res.json();
 }

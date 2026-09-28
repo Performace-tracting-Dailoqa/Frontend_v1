@@ -7,6 +7,7 @@ export interface Workflow {
   name: string;
   description?: string | null;
   is_active: boolean;
+  status?: string | null;
   evaluator_manager_id: string;
   created_at: string;
   updated_at: string;
@@ -18,11 +19,21 @@ export interface WorkflowTask {
   title: string;
   description?: string | null;
   status: string;
+  priority?: string | null;
+  due_date?: string | null;
+  submitted_at?: string | null;
+  completed_at?: string | null;
   student_id: string;
   assigned_by_manager_id: string;
+  student_grade?: number | null;
+  student_metric_grades?: any[] | null;
+  manager_grade?: number | null;
+  final_grade?: number | null;
+  submission_notes?: string | null;
   created_at: string;
   updated_at: string;
 }
+
 
 export interface PaginatedResponse<T> {
   items: T[];
@@ -208,6 +219,13 @@ export async function fetchManagerTeam(): Promise<TeamMember[]> {
 // Student Workflow Tasks (/api/v1/student/tasks)
 // ---------------------------------------------------------------------------
 
+export interface MetricGradeItem {
+  metric_name: string;
+  score: number;
+  full_score: number;
+  remarks?: string;
+}
+
 export interface StudentTaskItem {
   id: string;
   workflow_id?: string | null;
@@ -223,6 +241,11 @@ export interface StudentTaskItem {
   completed_at?: string | null;
   status: string;
   priority?: string | null;
+  student_grade?: number | null;
+  submission_notes?: string | null;
+  student_metric_grades?: MetricGradeItem[] | null;
+  manager_grade?: number | null;
+  final_grade?: number | null;
   created_at?: string | null;
   updated_at?: string | null;
 }
@@ -247,16 +270,72 @@ export async function fetchStudentTasks(
   return await res.json();
 }
 
-export async function updateStudentTaskStatus(taskId: string, status: string): Promise<StudentTaskItem> {
+export async function updateStudentTaskStatus(
+  taskId: string,
+  status: string,
+  data?: {
+    student_grade?: number | null;
+    submission_notes?: string | null;
+    student_metric_grades?: MetricGradeItem[] | null;
+  }
+): Promise<StudentTaskItem> {
+  const payload: Record<string, any> = { status };
+  if (data?.student_grade !== undefined) payload.student_grade = data.student_grade;
+  if (data?.submission_notes !== undefined) payload.submission_notes = data.submission_notes;
+  if (data?.student_metric_grades !== undefined) payload.student_metric_grades = data.student_metric_grades;
+
   const res = await fetch(`/api/v1/student/tasks/${taskId}`, {
     method: "PATCH",
     headers: getHeaders(),
     credentials: "same-origin",
-    body: JSON.stringify({ status }),
+    body: JSON.stringify(payload),
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.detail?.message || err?.detail || `Failed to update task status (${res.status})`);
+  }
+  return await res.json();
+}
+
+
+export interface StudentMetricItem {
+  id: string;
+  name: string;
+  description?: string | null;
+  score?: number | null;
+  full_score?: number | null;
+  max_score?: number | null;
+  weightage?: number | null;
+  weighted_score?: number | null;
+  remarks?: string | null;
+}
+
+export interface StudentEvaluationItem {
+  id: string;
+  evaluation_type: string;
+  task_id?: string | null;
+  task_title?: string | null;
+  workflow_title?: string | null;
+  evaluator_name?: string | null;
+  total_score?: number | null;
+  max_score?: number | null;
+  percentage?: number | null;
+  status?: string | null;
+  remarks?: string | null;
+  evaluated_at?: string | null;
+  finalized_at?: string | null;
+  metrics: StudentMetricItem[];
+}
+
+export async function fetchStudentEvaluations(): Promise<{ total: number; items: StudentEvaluationItem[] }> {
+  const res = await fetch("/api/v1/student/evaluations", {
+    headers: getHeaders(),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch evaluations (${res.status})`);
   }
   return await res.json();
 }
@@ -326,3 +405,80 @@ export async function fetchTeacherStudents(): Promise<TeamMember[]> {
   }
   return await res.json();
 }
+
+// ---------------------------------------------------------------------------
+// Manager Overview, Tasks & Progress Analytics
+// ---------------------------------------------------------------------------
+
+export interface BatchProgressItem {
+  batch_name: string;
+  total: number;
+  completed: number;
+  percentage: number;
+}
+
+export interface StatusDistributionItem {
+  name: string;
+  value: number;
+  color?: string;
+}
+
+export interface PriorityDistributionItem {
+  name: string;
+  value: number;
+}
+
+export interface LearnerProgressItem {
+  student_id: string;
+  student_name: string;
+  email: string;
+  batch_name: string;
+  total: number;
+  completed: number;
+  percentage: number;
+  avg_grade: number;
+}
+
+export interface ManagerProgressSummary {
+  total_tasks: number;
+  completed_tasks: number;
+  pending_tasks: number;
+  in_progress_tasks: number;
+  under_review_tasks: number;
+  overall_completion_rate: number;
+  batch_distribution: BatchProgressItem[];
+  status_distribution: StatusDistributionItem[];
+  priority_distribution: PriorityDistributionItem[];
+  learner_distribution: LearnerProgressItem[];
+}
+
+export async function fetchManagerProgressSummary(): Promise<ManagerProgressSummary> {
+  const res = await fetch("/api/v1/manager/progress", {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager progress (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchManagerTasks(
+  page = 1,
+  pageSize = 100,
+  status?: string
+): Promise<PaginatedResponse<WorkflowTask>> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (status) params.append("status", status);
+  const res = await fetch(`/api/v1/manager/tasks?${params.toString()}`, {
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager tasks (${res.status})`);
+  }
+  return await res.json();
+}
+

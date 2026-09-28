@@ -113,6 +113,28 @@ export default function StudentDashboardPage() {
 
   const [mentors, setMentors] = useState<{ id: string; name: string; role: string }[]>([]);
 
+  // Self-grading and deliverable submission modal state
+  interface StudentMetricState {
+    metric_name: string;
+    score: number;
+    full_score: number;
+    remarks?: string;
+  }
+
+  const DEFAULT_METRIC_RUBRICS: StudentMetricState[] = [
+    { metric_name: "Code & Implementation Quality", score: 23, full_score: 25, remarks: "" },
+    { metric_name: "Problem Solving & Logic", score: 22, full_score: 25, remarks: "" },
+    { metric_name: "Timeliness & Sprint Delivery", score: 24, full_score: 25, remarks: "" },
+    { metric_name: "Documentation & Clean Code", score: 21, full_score: 25, remarks: "" },
+  ];
+
+  const [selectedGradingTask, setSelectedGradingTask] = useState<StudentTaskItem | null>(null);
+  const [metricGrades, setMetricGrades] = useState<StudentMetricState[]>(DEFAULT_METRIC_RUBRICS);
+  const [submissionNotes, setSubmissionNotes] = useState<string>("");
+  const [submissionStatus, setSubmissionStatus] = useState<"submitted" | "completed">("submitted");
+  const [isSubmittingGrade, setIsSubmittingGrade] = useState<boolean>(false);
+  const [gradeError, setGradeError] = useState<string | null>(null);
+
   const loadStudentTasks = async () => {
     try {
       setIsLoadingTasks(true);
@@ -138,6 +160,81 @@ export default function StudentDashboardPage() {
     loadStudentTasks();
   }, []);
 
+  const handleOpenGradingModal = (task: StudentTaskItem, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setSelectedGradingTask(task);
+    if (task.student_metric_grades && task.student_metric_grades.length > 0) {
+      setMetricGrades(
+        task.student_metric_grades.map((m) => ({
+          metric_name: m.metric_name,
+          score: Number(m.score) || 0,
+          full_score: Number(m.full_score) || 25,
+          remarks: m.remarks || "",
+        }))
+      );
+    } else {
+      setMetricGrades(DEFAULT_METRIC_RUBRICS);
+    }
+    setSubmissionNotes(task.submission_notes || "");
+    setSubmissionStatus(task.status === "completed" ? "completed" : "submitted");
+    setGradeError(null);
+  };
+
+  const handleMetricScoreChange = (index: number, newScore: number) => {
+    setMetricGrades((prev) =>
+      prev.map((item, idx) => {
+        if (idx !== index) return item;
+        const clamped = Math.max(0, Math.min(item.full_score, newScore));
+        return { ...item, score: clamped };
+      })
+    );
+  };
+
+  const handleMetricRemarksChange = (index: number, remarks: string) => {
+    setMetricGrades((prev) =>
+      prev.map((item, idx) => (idx === index ? { ...item, remarks } : item))
+    );
+  };
+
+  const totalCalculatedGrade = metricGrades.reduce((acc, m) => acc + (Number(m.score) || 0), 0);
+  const totalMaxGrade = metricGrades.reduce((acc, m) => acc + (Number(m.full_score) || 25), 0);
+
+  const handleSubmitGrade = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedGradingTask) return;
+
+    setIsSubmittingGrade(true);
+    setGradeError(null);
+    try {
+      const updated = await updateStudentTaskStatus(selectedGradingTask.id, submissionStatus, {
+        student_grade: totalCalculatedGrade,
+        submission_notes: submissionNotes.trim() || undefined,
+        student_metric_grades: metricGrades,
+      });
+
+      // Update state locally in real time
+      setRealTasks((prev) =>
+        prev.map((t) =>
+          t.id === selectedGradingTask.id
+            ? {
+                ...t,
+                ...updated,
+                status: submissionStatus,
+                student_grade: totalCalculatedGrade,
+                submission_notes: submissionNotes.trim(),
+                student_metric_grades: metricGrades,
+              }
+            : t
+        )
+      );
+      setSelectedGradingTask(null);
+    } catch (err: unknown) {
+      setGradeError(err instanceof Error ? err.message : "Failed to submit grade and deliverable");
+    } finally {
+      setIsSubmittingGrade(false);
+    }
+  };
+
   const handleToggleTaskStatus = async (taskId: string, currentStatus: string) => {
     const nextStatus = currentStatus === "completed" ? "pending" : "completed";
     setRealTasks((prev) =>
@@ -153,22 +250,22 @@ export default function StudentDashboardPage() {
 
 
 
-  const weeklyData = [
-    { day: "Mon", pct: 72, tasks: 4 },
-    { day: "Tue", pct: 85, tasks: 6 },
-    { day: "Wed", pct: 90, tasks: 7 },
-    { day: "Thu", pct: 68, tasks: 3 },
-    { day: "Fri", pct: 94, tasks: 8 },
-    { day: "Sat", pct: 80, tasks: 5 },
-    { day: "Sun", pct: 76, tasks: 4 },
-  ];
 
-  const monthlyData = [
-    { day: "W1", pct: 78, tasks: 22 },
-    { day: "W2", pct: 88, tasks: 29 },
-    { day: "W3", pct: 92, tasks: 31 },
-    { day: "W4", pct: 84, tasks: 26 },
-  ];
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const weeklyData = days.map((day, idx) => {
+    const slice = realTasks.filter((_, i) => i % 7 === idx);
+    const completed = slice.filter((t) => t.status === "completed" || t.status === "done").length;
+    const pct = slice.length > 0 ? Math.round((completed / slice.length) * 100) : 0;
+    return { day, pct, tasks: slice.length };
+  });
+
+  const weeks = ["W1", "W2", "W3", "W4"];
+  const monthlyData = weeks.map((w, idx) => {
+    const slice = realTasks.filter((_, i) => i % 4 === idx);
+    const completed = slice.filter((t) => t.status === "completed" || t.status === "done").length;
+    const pct = slice.length > 0 ? Math.round((completed / slice.length) * 100) : 0;
+    return { day: w, pct, tasks: slice.length };
+  });
 
   const chartData = velocityTimeframe === "weekly" ? weeklyData : monthlyData;
 
@@ -376,50 +473,85 @@ export default function StudentDashboardPage() {
               </div>
             ) : (
               realTasks.map((task) => {
-                const isDone = task.status === "completed";
+                const isDone = task.status === "completed" || task.status === "done";
+                const isSubmitted = task.status === "submitted";
+                const hasGrade = task.student_grade !== null && task.student_grade !== undefined;
                 return (
                   <div
                     key={task.id}
-                    onClick={() => handleToggleTaskStatus(task.id, task.status)}
-                    className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
+                    className={`p-3.5 rounded-xl border transition-all flex flex-col gap-2 ${
                       isDone
-                        ? "bg-slate-50/60 border-slate-200 opacity-60 line-through"
+                        ? "bg-slate-50/80 border-slate-200"
+                        : isSubmitted
+                        ? "bg-indigo-50/30 border-indigo-200/80 shadow-2xs"
                         : "bg-white border-slate-200 hover:border-primary/40 shadow-2xs"
                     }`}
                   >
-                    <div
-                      className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 ${
-                        isDone ? "bg-primary border-primary text-white" : "border-slate-300 bg-white"
-                      }`}
-                    >
-                      {isDone && <span className="material-symbols-outlined text-sm font-bold">check</span>}
-                    </div>
-                    <div className="flex-1 overflow-hidden">
-                      <div className="flex items-center justify-between gap-2">
-                        <h4 className="text-xs font-bold text-slate-900 truncate">{task.title}</h4>
-                        <span
-                          className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 ${
-                            isDone
-                              ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
-                              : "bg-amber-50 text-amber-700 border border-amber-100"
-                          }`}
-                        >
-                          {isDone ? "Completed" : "Pending"}
-                        </span>
-                      </div>
-                      {task.description && (
-                        <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{task.description}</p>
-                      )}
-                      <div className="flex items-center gap-2 mt-2 text-[10px] text-slate-400 flex-wrap">
-                        {task.workflow_name && (
-                          <span className="font-semibold text-indigo-600 bg-indigo-50/80 px-1.5 py-0.5 rounded">
-                            {task.workflow_name}
+                    <div className="flex items-start gap-3">
+                      <button
+                        onClick={() => handleToggleTaskStatus(task.id, task.status)}
+                        title={`Click to mark ${isDone ? "pending" : "completed"}`}
+                        className={`mt-0.5 w-5 h-5 rounded-md border flex items-center justify-center transition-colors shrink-0 cursor-pointer ${
+                          isDone ? "bg-primary border-primary text-white" : "border-slate-300 bg-white hover:border-primary"
+                        }`}
+                      >
+                        {isDone && <span className="material-symbols-outlined text-sm font-bold">check</span>}
+                      </button>
+                      <div className="flex-1 overflow-hidden">
+                        <div className="flex items-center justify-between gap-2">
+                          <h4 className={`text-xs font-bold text-slate-900 truncate ${isDone ? "line-through text-slate-500" : ""}`}>{task.title}</h4>
+                          <span
+                            className={`text-[10px] font-semibold px-2 py-0.5 rounded-md shrink-0 capitalize ${
+                              isDone
+                                ? "bg-emerald-50 text-emerald-700 border border-emerald-100"
+                                : isSubmitted
+                                ? "bg-indigo-50 text-indigo-700 border border-indigo-200"
+                                : "bg-amber-50 text-amber-700 border border-amber-100"
+                            }`}
+                          >
+                            {task.status || "Pending"}
                           </span>
+                        </div>
+                        {task.description && (
+                          <p className="text-[11px] text-slate-500 mt-0.5 line-clamp-2">{task.description}</p>
                         )}
-                        {task.assigned_by_name && (
-                          <span>By {task.assigned_by_name}</span>
+
+                        {/* Self-Grade and submission remarks display */}
+                        {(hasGrade || task.submission_notes) && (
+                          <div className="mt-2 p-2 bg-indigo-50/40 border border-indigo-100 rounded-lg text-[11px] space-y-1">
+                            {hasGrade && (
+                              <div className="flex items-center gap-1.5 font-bold text-emerald-700">
+                                <span className="material-symbols-outlined text-sm">stars</span>
+                                <span>Self Grade: {task.student_grade} / 100</span>
+                              </div>
+                            )}
+                            {task.submission_notes && (
+                              <p className="text-slate-600 text-[10px] leading-relaxed line-clamp-2">
+                                <strong className="text-slate-700">Deliverable:</strong> {task.submission_notes}
+                              </p>
+                            )}
+                          </div>
                         )}
-                        <span>• Click to {isDone ? "mark pending" : "complete"}</span>
+
+                        <div className="flex items-center justify-between gap-2 mt-2 pt-2 border-t border-slate-100 flex-wrap">
+                          <div className="flex items-center gap-2 text-[10px] text-slate-400">
+                            {task.workflow_name && (
+                              <span className="font-semibold text-indigo-600 bg-indigo-50/80 px-1.5 py-0.5 rounded">
+                                {task.workflow_name}
+                              </span>
+                            )}
+                            {task.assigned_by_name && (
+                              <span>Manager: {task.assigned_by_name}</span>
+                            )}
+                          </div>
+                          <button
+                            onClick={(e) => handleOpenGradingModal(task, e)}
+                            className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-[10px] font-bold shadow-2xs transition-all cursor-pointer inline-flex items-center gap-1"
+                          >
+                            <span className="material-symbols-outlined text-xs">edit_note</span>
+                            <span>{hasGrade ? "Update Grade" : "Grade & Submit"}</span>
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -479,6 +611,169 @@ export default function StudentDashboardPage() {
 
       </div>
 
+      {/* Student Self-Grade & Deliverable Modal */}
+      {selectedGradingTask && (
+        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl max-w-lg w-full border border-slate-200 p-6 shadow-2xl animate-fade-in">
+            <div className="flex items-start justify-between pb-3 border-b border-slate-100">
+              <div>
+                <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 font-bold text-[10px] rounded uppercase tracking-wider">
+                  Work Assigned By Manager
+                </span>
+                <h3 className="text-base font-bold text-slate-900 font-headline mt-1">
+                  {selectedGradingTask.title}
+                </h3>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Workflow: {selectedGradingTask.workflow_name || "Assigned Task"} • Manager: {selectedGradingTask.assigned_by_name || "Manager"}
+                </p>
+              </div>
+              <button
+                onClick={() => setSelectedGradingTask(null)}
+                className="text-slate-400 hover:text-slate-600 text-lg cursor-pointer p-1"
+              >
+                ✕
+              </button>
+            </div>
+
+            {gradeError && (
+              <div className="mt-3 p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-lg">
+                {gradeError}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmitGrade} className="mt-4 space-y-4">
+              {selectedGradingTask.description && (
+                <div className="p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs text-slate-600">
+                  <strong className="block text-slate-800 mb-0.5">Task Requirements:</strong>
+                  {selectedGradingTask.description}
+                </div>
+              )}
+
+              {selectedGradingTask.manager_grade !== null && selectedGradingTask.manager_grade !== undefined && (
+                <div className="p-3 bg-emerald-50 border border-emerald-200 rounded-xl flex items-center justify-between text-xs text-emerald-900">
+                  <div>
+                    <span className="font-bold">Manager Grade on Record: {selectedGradingTask.manager_grade}/100</span>
+                    {selectedGradingTask.final_grade !== null && selectedGradingTask.final_grade !== undefined && (
+                      <span className="block text-[11px] text-emerald-700">Official Final Grade: {selectedGradingTask.final_grade}/100</span>
+                    )}
+                  </div>
+                  <span className="px-2 py-0.5 bg-emerald-100 text-emerald-800 font-bold rounded text-[10px] uppercase">Evaluated</span>
+                </div>
+              )}
+
+              {/* Rubric Metrics Breakdown */}
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-slate-800 uppercase tracking-wide">
+                    Self-Grade by Metrics
+                  </label>
+                  <span className="text-[11px] text-slate-500 font-medium">Rate each competency</span>
+                </div>
+
+                <div className="space-y-2.5 max-h-56 overflow-y-auto pr-1">
+                  {metricGrades.map((metric, idx) => (
+                    <div key={metric.metric_name} className="p-2.5 bg-slate-50 border border-slate-200/80 rounded-xl space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-semibold text-slate-800 truncate">{metric.metric_name}</span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <input
+                            type="number"
+                            min="0"
+                            max={metric.full_score}
+                            step="1"
+                            value={metric.score}
+                            onChange={(e) => handleMetricScoreChange(idx, Number(e.target.value))}
+                            className="w-14 px-2 py-1 bg-white border border-slate-300 rounded-lg text-xs font-bold text-slate-900 text-right focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                          />
+                          <span className="text-[11px] font-semibold text-slate-500">/ {metric.full_score}</span>
+                        </div>
+                      </div>
+
+                      <input
+                        type="range"
+                        min="0"
+                        max={metric.full_score}
+                        value={metric.score}
+                        onChange={(e) => handleMetricScoreChange(idx, Number(e.target.value))}
+                        className="w-full accent-indigo-600 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer"
+                      />
+
+                      <input
+                        type="text"
+                        value={metric.remarks || ""}
+                        onChange={(e) => handleMetricRemarksChange(idx, e.target.value)}
+                        placeholder="Optional metric notes or self-reflection..."
+                        className="w-full px-2 py-1 bg-white border border-slate-200 rounded-lg text-[11px] text-slate-700 placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                {/* Live Auto-Calculated Total */}
+                <div className="p-3 bg-indigo-50/80 border border-indigo-200 rounded-xl flex items-center justify-between">
+                  <div>
+                    <span className="text-xs font-bold text-indigo-950 block">Auto-Calculated Total Grade</span>
+                    <span className="text-[11px] text-indigo-600">Sum of your individual metric ratings</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-xl font-mono font-bold text-indigo-700">{totalCalculatedGrade}</span>
+                    <span className="text-xs text-indigo-600 font-semibold"> / {totalMaxGrade} pts</span>
+                    <span className="block text-[10px] text-indigo-500 font-mono">
+                      ({Math.round((totalCalculatedGrade / (totalMaxGrade || 100)) * 100)}%)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Deliverable Notes &amp; Reflections
+                </label>
+                <textarea
+                  rows={3}
+                  value={submissionNotes}
+                  onChange={(e) => setSubmissionNotes(e.target.value)}
+                  placeholder="Summarize your implementation, key accomplishments, repository links, or PR notes..."
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-slate-700 mb-1">
+                  Task Status
+                </label>
+                <select
+                  value={submissionStatus}
+                  onChange={(e) => setSubmissionStatus(e.target.value as "submitted" | "completed")}
+                  className="w-full px-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
+                >
+                  <option value="submitted">Submitted (Ready for Manager Evaluation)</option>
+                  <option value="completed">Completed &amp; Finalized</option>
+                </select>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setSelectedGradingTask(null)}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSubmittingGrade}
+                  className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-colors shadow-sm cursor-pointer inline-flex items-center gap-1.5"
+                >
+                  {isSubmittingGrade ? "Submitting..." : "Submit Self-Grade & Deliverable"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
+

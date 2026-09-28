@@ -1,211 +1,240 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import CountUp from "@/components/animations/CountUp";
 import BorderBeam from "@/components/animations/BorderBeam";
-import Magnet from "@/components/animations/Magnet";
-
-interface RubricItem {
-  id: string;
-  name: string;
-  desc: string;
-  score: number;
-}
+import { fetchStudentEvaluations, StudentEvaluationItem } from "@/services/workflowService";
 
 export default function StudentEvaluationsPage() {
-  const [rubrics, setRubrics] = useState<RubricItem[]>([]);
+  const [evaluations, setEvaluations] = useState<StudentEvaluationItem[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [selectedEvaluation, setSelectedEvaluation] = useState<StudentEvaluationItem | null>(null);
 
-  const [reflectionText, setReflectionText] = useState("");
+  useEffect(() => {
+    fetchStudentEvaluations()
+      .then((res) => {
+        setEvaluations(res.items || []);
+        if (res.items && res.items.length > 0) {
+          setSelectedEvaluation(res.items[0]);
+        }
+      })
+      .catch((err) => console.warn("Failed to load student evaluations:", err))
+      .finally(() => setIsLoading(false));
+  }, []);
 
-  const [submitted, setSubmitted] = useState(false);
-
-  const handleScoreChange = (id: string, newScore: number) => {
-    setRubrics((prev) => prev.map((r) => (r.id === id ? { ...r, score: newScore } : r)));
-  };
-
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-  };
+  const scoredEvaluations = evaluations.filter((e) => e.percentage !== null && e.percentage !== undefined);
+  const avgPercentage =
+    scoredEvaluations.length > 0
+      ? Math.round(
+          scoredEvaluations.reduce((acc, curr) => acc + (curr.percentage || 0), 0) / scoredEvaluations.length
+        )
+      : null;
 
   return (
-    <div className="space-y-space-lg">
-      
-      {/* ========================================================= */}
-      {/* BANNER                                                    */}
-      {/* ========================================================= */}
+    <div className="space-y-6">
+      {/* Banner */}
       <motion.div
         initial={{ opacity: 0, y: 15 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5 }}
-        className="flex flex-col md:flex-row md:items-center md:justify-between gap-space-md bg-white p-6 sm:p-space-xl rounded-3xl border border-slate-200/80 shadow-xs"
+        className="flex flex-col md:flex-row md:items-center md:justify-between gap-4 bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs"
       >
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-label-sm font-bold rounded-lg uppercase tracking-wider">
-              Formal Appraisal Gate
+            <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-100 text-indigo-700 text-xs font-bold rounded-lg uppercase tracking-wider">
+              Performance Dossier
             </span>
-            <span className="text-body-sm text-slate-500 font-medium">Q3 2026 Cycle</span>
+            <span className="text-body-sm text-slate-500 font-medium">Evaluations &amp; Feedback</span>
           </div>
-          <h1 className="font-headline font-bold text-headline-lg text-slate-900">
-            Performance Evaluations &amp; Dossier
+          <h1 className="font-headline font-bold text-3xl text-slate-900">
+            My Performance Evaluations
           </h1>
           <p className="text-body-md text-slate-600 max-w-2xl leading-relaxed mt-1">
-            Review mentor rubrics, submit your formal quarterly self-reflection, and monitor institutional accreditation eligibility.
+            Review detailed rubrics, manager task reviews, Japanese language appraisals, and mentor feedback.
           </p>
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="relative p-3 bg-white rounded-2xl border border-slate-200 shadow-xs text-center overflow-hidden">
+          <div className="relative p-4 bg-white rounded-2xl border border-slate-200 shadow-xs text-center min-w-[130px] overflow-hidden">
             <BorderBeam size={100} duration={8} colorFrom="#10b981" colorTo="#3b82f6" borderWidth={1.5} />
-            <span className="text-xs text-slate-500 block font-medium">Composite Score</span>
-            <strong className="text-headline-sm font-mono font-bold text-emerald-700">
-              <CountUp to={96.4} decimals={1} duration={1.8} /> / 100
+            <span className="text-xs text-slate-500 block font-medium">Average Score</span>
+            <strong className="text-2xl font-mono font-bold text-emerald-700">
+              {avgPercentage !== null ? (
+                <>
+                  <CountUp to={avgPercentage} decimals={0} duration={1.5} />%
+                </>
+              ) : (
+                "—"
+              )}
             </strong>
           </div>
-          <motion.div
-            whileHover={{ scale: 1.03 }}
-            className="p-3 bg-white rounded-2xl border border-slate-200 shadow-xs text-center"
-          >
-            <span className="text-xs text-slate-500 block font-medium">Accreditation Tier</span>
-            <strong className="text-headline-sm font-mono font-bold text-primary">NAAC A++</strong>
-          </motion.div>
+          <div className="p-4 bg-white rounded-2xl border border-slate-200 shadow-xs text-center min-w-[130px]">
+            <span className="text-xs text-slate-500 block font-medium">Total Appraisals</span>
+            <strong className="text-2xl font-mono font-bold text-primary">
+              {evaluations.length}
+            </strong>
+          </div>
         </div>
       </motion.div>
 
-      {/* ========================================================= */}
-      {/* EVALUATION CYCLE STATUS BAR                               */}
-      {/* ========================================================= */}
-      <div className="bg-white p-6 rounded-2xl border border-dashed border-outline-variant/60 shadow-xs text-center flex flex-col justify-center items-center">
-        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
-          <span className="material-symbols-outlined text-3xl">api</span>
+      {/* Main Content */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
         </div>
-        <h2 className="text-headline-sm font-bold text-slate-900 mb-2">Appraisal Lifecycle</h2>
-        <p className="text-body-sm text-slate-500 max-w-sm mb-4">
-          Backend Developer: Integrate the student's evaluation stages and mentor approval status here.
-        </p>
-        <div className="inline-flex flex-col gap-2 text-left bg-slate-50 p-4 rounded-lg border border-slate-200">
-          <code className="text-xs text-slate-600 font-mono">GET /api/v1/student/evaluations/stages</code>
-          <span className="text-[11px] text-slate-500 mt-1 block">Expected data: Stages with completion status and mentor notes.</span>
-        </div>
-      </div>
-
-      {/* ========================================================= */}
-      {/* SELF EVALUATION FORM                                      */}
-      {/* ========================================================= */}
-      <div className="bg-white p-6 sm:p-space-lg rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center justify-between mb-space-md">
-          <div>
-            <h2 className="font-headline font-bold text-headline-sm text-slate-900">
-              Self Evaluation Rubrics
-            </h2>
-            <p className="text-body-sm text-slate-500">
-              Rate your own performance against institutional standards before final appraisal sign-off
-            </p>
+      ) : evaluations.length === 0 ? (
+        <div className="text-center py-20 bg-white rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="w-16 h-16 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+            <span className="material-symbols-outlined text-3xl">verified</span>
           </div>
-          <span className="text-xs font-mono font-bold text-primary bg-indigo-50 border border-indigo-100 px-3 py-1 rounded-full">
-            Rubric Cycle 2026
-          </span>
+          <h3 className="text-lg font-bold text-slate-900 font-headline">No Evaluations Recorded Yet</h3>
+          <p className="text-sm text-slate-500 max-w-md mx-auto mt-1 mb-4">
+            Once your manager or teacher evaluates your submitted tasks and language milestones, your scorecards will be published here.
+          </p>
+          <Link
+            href="/student/dashboard"
+            className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-all inline-flex items-center gap-1.5"
+          >
+            <span>View Assigned Tasks</span>
+            <span className="material-symbols-outlined text-sm">arrow_forward</span>
+          </Link>
         </div>
-
-        <AnimatePresence mode="wait">
-          {submitted ? (
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              transition={{ type: "spring", duration: 0.5 }}
-              className="p-8 rounded-2xl bg-emerald-50 border border-emerald-200 text-center space-y-3"
-            >
-              <span className="material-symbols-outlined text-5xl text-emerald-700 animate-bounce">verified</span>
-              <h3 className="text-headline-md font-bold text-emerald-900">Self Evaluation Submitted!</h3>
-              <p className="text-body-md text-emerald-800 max-w-lg mx-auto">
-                Your self-appraisal score and reflection dossier have been locked and submitted to the Academic Dean and Department Review Committee.
-              </p>
-              <motion.button
-                whileHover={{ scale: 1.04 }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setSubmitted(false)}
-                className="mt-4 px-5 py-2 bg-emerald-700 hover:bg-emerald-800 text-white rounded-xl text-label-md font-semibold cursor-pointer transition-colors shadow-xs"
-              >
-                Modify Submission
-              </motion.button>
-            </motion.div>
-          ) : (
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-4">
-              {rubrics.map((r) => (
+      ) : (
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Evaluations List (Left Column) */}
+          <div className="space-y-3">
+            <h3 className="text-xs font-semibold text-slate-500 uppercase tracking-wider px-1">
+              Scorecards ({evaluations.length})
+            </h3>
+            {evaluations.map((ev) => {
+              const isSelected = selectedEvaluation?.id === ev.id;
+              return (
                 <div
-                  key={r.id}
-                  className="p-4 sm:p-5 rounded-xl bg-surface-container-lowest border border-surface-container-highest/80 flex flex-col sm:flex-row sm:items-center justify-between gap-4 shadow-2xs"
+                  key={ev.id}
+                  onClick={() => setSelectedEvaluation(ev)}
+                  className={`p-4 rounded-2xl border transition-all cursor-pointer ${
+                    isSelected
+                      ? "bg-white border-primary shadow-sm ring-1 ring-primary"
+                      : "bg-white/80 border-slate-200/80 hover:bg-white hover:border-slate-300"
+                  }`}
                 >
-                  <div className="flex-1">
-                    <h4 className="text-body-md font-bold text-on-surface mb-1">{r.name}</h4>
-                    <p className="text-body-sm text-on-surface-variant">{r.desc}</p>
-                  </div>
-
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    {[1, 2, 3, 4, 5].map((star) => (
-                      <button
-                        key={star}
-                        type="button"
-                        onClick={() => handleScoreChange(r.id, star)}
-                        className={`w-9 h-9 rounded-xl border text-sm font-bold font-mono transition-all flex items-center justify-center ${
-                          star <= r.score
-                            ? "bg-primary text-on-primary border-primary shadow-xs"
-                            : "bg-surface-container text-on-surface-variant border-surface-container-highest hover:bg-surface-container-high"
-                        }`}
-                      >
-                        {star}
-                      </button>
-                    ))}
-                    <span className="text-xs font-mono text-on-surface font-bold ml-2">
-                      {r.score} / 5
+                  <div className="flex items-center justify-between mb-2">
+                    <span
+                      className={`text-[11px] font-semibold px-2 py-0.5 rounded-full uppercase tracking-wider ${
+                        ev.evaluation_type === "workflow"
+                          ? "bg-purple-50 text-purple-700 border border-purple-200"
+                          : "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                      }`}
+                    >
+                      {ev.evaluation_type === "workflow" ? "Manager Task" : "Language & Milestone"}
+                    </span>
+                    <span className="text-xs font-bold font-mono text-slate-900">
+                      {ev.percentage !== null && ev.percentage !== undefined ? `${ev.percentage}%` : "Pending"}
                     </span>
                   </div>
+                  <h4 className="text-sm font-bold text-slate-900 line-clamp-1">{ev.task_title}</h4>
+                  <div className="flex items-center justify-between mt-2 pt-2 border-t border-slate-100 text-xs text-slate-500">
+                    <span>Evaluator: {ev.evaluator_name}</span>
+                    <span>{ev.evaluated_at ? new Date(ev.evaluated_at).toLocaleDateString() : ""}</span>
+                  </div>
                 </div>
-              ))}
-            </div>
+              );
+            })}
+          </div>
 
-            {/* Reflection Textarea */}
-            <div>
-              <label className="text-body-md font-bold text-on-surface block mb-2">
-                Detailed Self Reflection &amp; Next-Cycle Milestones
-              </label>
-              <textarea
-                rows={4}
-                value={reflectionText}
-                onChange={(e) => setReflectionText(e.target.value)}
-                placeholder="Elaborate on your key achievements, challenges solved, and focus areas for next quarter..."
-                className="w-full p-4 rounded-xl bg-surface-container-lowest border border-surface-container-highest text-on-surface text-body-md focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                required
-              />
-            </div>
+          {/* Evaluation Details & Rubrics (Right Column) */}
+          <div className="lg:col-span-2">
+            {selectedEvaluation && (
+              <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-100">
+                  <div>
+                    <span className="text-xs font-bold text-primary uppercase tracking-wider block mb-1">
+                      {selectedEvaluation.evaluation_type === "workflow"
+                        ? "Workflow Deliverable Review"
+                        : "Milestone Assessment"}
+                    </span>
+                    <h2 className="text-2xl font-bold font-headline text-slate-900">
+                      {selectedEvaluation.task_title}
+                    </h2>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Evaluated by <strong className="text-slate-800">{selectedEvaluation.evaluator_name}</strong>
+                      {selectedEvaluation.evaluated_at && (
+                        <> on {new Date(selectedEvaluation.evaluated_at).toLocaleDateString()}</>
+                      )}
+                    </p>
+                  </div>
 
-            {/* Submit Action */}
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-4 pt-4 border-t border-slate-200/80">
-              <span className="text-xs text-slate-500 font-mono">
-                Submission locks upon sending. Mentors will be notified automatically.
-              </span>
-              <Magnet padding={25} magnetStrength={3}>
-                <motion.button
-                  whileHover={{ scale: 1.03 }}
-                  whileTap={{ scale: 0.97 }}
-                  type="submit"
-                  className="w-full sm:w-auto px-8 py-3 bg-primary hover:bg-[#4326dd] text-white rounded-xl text-label-md font-bold transition-all shadow-sm flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-lg">send</span>
-                  <span>Submit Final Self Evaluation</span>
-                </motion.button>
-              </Magnet>
-            </div>
-          </form>
-        )}
-        </AnimatePresence>
-      </div>
+                  <div className="text-right p-4 bg-slate-50 rounded-2xl border border-slate-200/60 shrink-0">
+                    <span className="text-xs text-slate-500 block font-medium">Score Achieved</span>
+                    <div className="text-2xl font-bold font-headline text-emerald-700">
+                      {selectedEvaluation.total_score !== null && selectedEvaluation.total_score !== undefined
+                        ? selectedEvaluation.total_score
+                        : "—"}
+                      <span className="text-sm font-normal text-slate-500">
+                        {" "}
+                        / {selectedEvaluation.max_score || 100} pts
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
+                {/* Remarks & Feedback */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                    Evaluator Feedback &amp; Remarks
+                  </h4>
+                  {selectedEvaluation.remarks ? (
+                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 text-sm text-slate-700 leading-relaxed italic">
+                      &quot;{selectedEvaluation.remarks}&quot;
+                    </div>
+                  ) : (
+                    <p className="text-xs text-slate-400 italic">No specific written remarks recorded.</p>
+                  )}
+                </div>
+
+                {/* Rubric Metrics Breakdown */}
+                <div>
+                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-3">
+                    Evaluation Criteria &amp; Metric Rubrics
+                  </h4>
+
+                  {selectedEvaluation.metrics.length === 0 ? (
+                    <p className="text-xs text-slate-400 italic">
+                      Overall score assigned directly without sub-metric weightages.
+                    </p>
+                  ) : (
+                    <div className="divide-y divide-slate-100 border border-slate-200/60 rounded-2xl overflow-hidden">
+                      {selectedEvaluation.metrics.map((metric) => (
+                        <div key={metric.id} className="p-4 bg-white flex items-center justify-between gap-4">
+                          <div>
+                            <div className="font-semibold text-sm text-slate-900">{metric.name}</div>
+                            {metric.description && (
+                              <p className="text-xs text-slate-500 mt-0.5">{metric.description}</p>
+                            )}
+                            {metric.weightage && (
+                              <span className="text-[11px] font-mono text-slate-400 mt-1 block">
+                                Weight: {metric.weightage}
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-right shrink-0">
+                            <span className="text-sm font-bold font-mono text-slate-900">
+                              {metric.score !== null && metric.score !== undefined ? metric.score : "—"}
+                            </span>
+                            <span className="text-xs text-slate-400 font-mono"> / {metric.full_score} pts</span>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

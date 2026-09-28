@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ManagerTab } from "@/components/manager/types";
@@ -17,6 +17,7 @@ import {
   fetchWorkflowTasks,
   createWorkflowTask,
   deleteWorkflowTask,
+  fetchManagerTasks,
 } from "@/services/workflowService";
 import {
   WorkflowEvaluation,
@@ -37,6 +38,7 @@ import ReportsTab from "@/components/manager/tabs/ReportsTab";
 import HistoryTab from "@/components/manager/tabs/HistoryTab";
 
 function ManagerDashboardContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as ManagerTab | null;
   const activeTab: ManagerTab = tabParam || "dashboard";
@@ -52,6 +54,7 @@ function ManagerDashboardContent() {
   const [isLoadingWorkflows, setIsLoadingWorkflows] = useState(false);
   const [selectedWorkflow, setSelectedWorkflow] = useState<Workflow | null>(null);
   const [tasks, setTasks] = useState<WorkflowTask[]>([]);
+  const [allManagerTasks, setAllManagerTasks] = useState<WorkflowTask[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = useState(false);
   const [selectedTask, setSelectedTask] = useState<WorkflowTask | null>(null);
 
@@ -84,15 +87,31 @@ function ManagerDashboardContent() {
 
   const [actionError, setActionError] = useState<string | null>(null);
 
+  // Load All Manager Tasks across all workflows
+  const loadAllManagerTasks = useCallback(async () => {
+    try {
+      const res = await fetchManagerTasks(1, 200);
+      if (res && res.items) {
+        setAllManagerTasks(res.items);
+      }
+    } catch (err) {
+      console.warn("Failed to load all manager tasks:", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAllManagerTasks();
+  }, [loadAllManagerTasks]);
+
   // Sync with URL hash (e.g. #workflows, #evaluations)
   useEffect(() => {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
       if (hash && ["team", "workflows", "progress", "evaluations", "feedback", "reports", "history"].includes(hash)) {
-        setActiveTab(hash as "dashboard" | "team" | "workflows" | "progress" | "evaluations" | "feedback" | "reports" | "history");
+        router.push(`/dashboard/manager?tab=${hash}`);
       }
     }
-  }, []);
+  }, [router]);
 
   // Load Authorized Team Members
   const loadTeamMembers = useCallback(async () => {
@@ -117,6 +136,9 @@ function ManagerDashboardContent() {
       setIsLoadingWorkflows(true);
       const res = await fetchWorkflows(1, 100);
       setWorkflows(res.items || []);
+      if (res.items && res.items.length > 0) {
+        setSelectedWorkflow((prev) => prev || res.items[0]);
+      }
     } catch (err) {
       console.warn("Failed to load workflows:", err);
     } finally {
@@ -134,6 +156,9 @@ function ManagerDashboardContent() {
       setIsLoadingTasks(true);
       const res = await fetchWorkflowTasks(workflowId, 1, 100);
       setTasks(res.items || []);
+      if (res.items && res.items.length > 0) {
+        setSelectedTask((prev) => (prev && res.items.some((t) => t.id === prev.id) ? prev : res.items[0]));
+      }
     } catch (err) {
       console.warn("Failed to load tasks:", err);
     } finally {
@@ -414,14 +439,118 @@ function ManagerDashboardContent() {
 
               {/* Content Panel */}
               <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8">
-                {activeTab === "dashboard" && <DashboardTab />}
-                {activeTab === "team" && <TeamTab />}
-                {activeTab === "workflows" && <WorkflowsTab />}
-                {activeTab === "progress" && <ProgressTab />}
-                {activeTab === "evaluations" && <EvaluationsTab />}
-                {activeTab === "feedback" && <FeedbackTab />}
-                {activeTab === "reports" && <ReportsTab />}
-                {activeTab === "history" && <HistoryTab />}
+                {activeTab === "dashboard" && (
+                  <DashboardTab
+                    teamMembers={teamMembers}
+                    workflows={workflows}
+                    tasks={tasks}
+                    evaluation={evaluation}
+                    onNavigateTab={(tab) => router.push(`/dashboard/manager?tab=${tab}`)}
+                  />
+                )}
+                {activeTab === "team" && (
+                  <TeamTab
+                    teamMembers={teamMembers}
+                    isLoading={isLoadingTeam}
+                    onMemberCreated={loadTeamMembers}
+                    onAssignTask={(studentId) => {
+                      setTaskStudentId(studentId);
+                      router.push("/dashboard/manager?tab=progress");
+                    }}
+                  />
+                )}
+                {activeTab === "workflows" && (
+                  <WorkflowsTab
+                    workflows={workflows}
+                    isLoading={isLoadingWorkflows}
+                    selectedWorkflow={selectedWorkflow}
+                    onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
+                    onCreateWorkflow={async (data) => {
+                      await createWorkflow(data);
+                      await loadWorkflows();
+                    }}
+                    onDeleteWorkflow={handleDeleteWorkflow}
+                    onNavigateToProgress={() => router.push("/dashboard/manager?tab=progress")}
+                  />
+                )}
+                {activeTab === "progress" && (
+                  <ProgressTab
+                    workflows={workflows}
+                    selectedWorkflow={selectedWorkflow}
+                    onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
+                    tasks={tasks}
+                    isLoadingTasks={isLoadingTasks}
+                    teamMembers={teamMembers}
+                    selectedTask={selectedTask}
+                    onSelectTask={(t) => setSelectedTask(t)}
+                    onCreateTask={async (data) => {
+                      if (!selectedWorkflow) return;
+                      if (data.student_id === "ALL") {
+                        await Promise.all(
+                          teamMembers.map((m) =>
+                            createWorkflowTask(selectedWorkflow.id, {
+                              ...data,
+                              student_id: m.id,
+                            })
+                          )
+                        );
+                      } else {
+                        await createWorkflowTask(selectedWorkflow.id, data);
+                      }
+                      await loadTasks(selectedWorkflow.id);
+                    }}
+                    onDeleteTask={handleDeleteTask}
+                    onNavigateToEvaluations={() => router.push("/dashboard/manager?tab=evaluations")}
+                  />
+                )}
+                {activeTab === "evaluations" && (
+                  <EvaluationsTab
+                    workflows={workflows}
+                    selectedWorkflow={selectedWorkflow}
+                    onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
+                    tasks={tasks}
+                    selectedTask={selectedTask}
+                    onSelectTask={(t) => setSelectedTask(t)}
+                    evaluation={evaluation}
+                    isLoadingEvaluation={isLoadingEvaluation}
+                    teamMembers={teamMembers}
+                    onCreateEvaluation={async (maxScore) => {
+                      if (!selectedWorkflow || !selectedTask) return;
+                      await createEvaluation(selectedWorkflow.id, selectedTask.id, {
+                        student_id: selectedTask.student_id,
+                        max_score: maxScore,
+                      });
+                      await loadEvaluation(selectedWorkflow.id, selectedTask.id);
+                    }}
+                    onDeleteEvaluation={handleDeleteEvaluation}
+                    onCreateMetric={async (data) => {
+                      if (!selectedWorkflow || !selectedTask || !evaluation) return;
+                      await createEvaluationMetric(selectedWorkflow.id, selectedTask.id, evaluation.id, data);
+                      await loadEvaluation(selectedWorkflow.id, selectedTask.id);
+                    }}
+                    onDeleteMetric={handleDeleteMetric}
+                  />
+                )}
+                {activeTab === "feedback" && (
+                  <FeedbackTab
+                    tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
+                    teamMembers={teamMembers}
+                    evaluation={evaluation}
+                  />
+                )}
+                {activeTab === "reports" && (
+                  <ReportsTab
+                    tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
+                    teamMembers={teamMembers}
+                  />
+                )}
+                {activeTab === "history" && (
+                  <HistoryTab
+                    tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
+                    teamMembers={teamMembers}
+                    evaluation={evaluation}
+                  />
+                )}
               </div>
 
             </div>

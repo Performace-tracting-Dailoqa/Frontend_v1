@@ -9,7 +9,9 @@ import {
   DirectoryPerson,
   DirectoryRole,
   fetchBatchOptions,
+  getCurrentProfile,
 } from "@/services/adminService";
+import { getAuthSession } from "@/utils/auth";
 import { ApiError } from "@/services/apiClient";
 import { useAsyncData } from "@/hooks/useAsyncData";
 import { PageIntro, Pill, PrimaryButton, SectionCard } from "../SuperAdminUi";
@@ -107,6 +109,20 @@ interface CreatedRecord {
 }
 
 export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPersonTabProps) {
+  const session = getAuthSession();
+  const currentProfile = getCurrentProfile();
+  const currentRoleName = session?.user?.role?.name || currentProfile?.role?.name || "";
+  const isManager =
+    currentRoleName.trim().toLowerCase().includes("manager") &&
+    !currentRoleName.trim().toLowerCase().includes("hr");
+
+  const availableRoleOptions = useMemo(() => {
+    if (isManager) {
+      return ROLE_OPTIONS.filter((option) => option.role === "Intern");
+    }
+    return ROLE_OPTIONS;
+  }, [isManager]);
+
   const [selectedRole, setSelectedRole] = useState<DirectoryRole>("Intern");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -128,8 +144,8 @@ export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPers
   const [created, setCreated] = useState<CreatedRecord | null>(null);
 
   const activeRole = useMemo(
-    () => ROLE_OPTIONS.find((option) => option.role === selectedRole) ?? ROLE_OPTIONS[3],
-    [selectedRole]
+    () => availableRoleOptions.find((option) => option.role === selectedRole) ?? availableRoleOptions[0],
+    [availableRoleOptions, selectedRole]
   );
 
   // HR has no batch column, so the list is fetched for the other three roles.
@@ -278,8 +294,12 @@ export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPers
     >
       <PageIntro
         icon="person_add"
-        title="Add Person"
-        description="Provision a new HR officer, manager, teacher or intern account"
+        title={isManager ? "Add Student / Intern" : "Add Person"}
+        description={
+          isManager
+            ? "Provision a new student or intern account in your cohort"
+            : "Provision a new HR officer, manager, teacher or intern account"
+        }
         action={
           <button
             type="button"
@@ -301,7 +321,7 @@ export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPers
           className="lg:col-span-2 self-start"
         >
           <div className="space-y-2">
-            {ROLE_OPTIONS.map((option) => {
+            {availableRoleOptions.map((option) => {
               const isActive = option.role === selectedRole;
               return (
                 <motion.button

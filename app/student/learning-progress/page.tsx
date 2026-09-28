@@ -18,138 +18,37 @@ interface TaskItem {
   notes: string;
 }
 
-const INITIAL_TASKS: TaskItem[] = [
-  {
-    id: "TSK-301",
-    title: "Implement Next.js App Router Architecture & Tailwind Tokens",
-    category: "Frontend Architecture",
-    priority: "High",
-    progress: 92,
-    dueDate: "Tomorrow",
-    status: "in-progress",
-    assignee: "Kanishka Sharma",
-    notes: "Integrated design tokens from DESIGN.md and ensured 60fps responsive navigation.",
-  },
-  {
-    id: "TSK-302",
-    title: "FastAPI REST Endpoint Integration with PyJWT Authentication",
-    category: "Backend Services",
-    priority: "Urgent",
-    progress: 85,
-    dueDate: "In 2 days",
-    status: "in-progress",
-    assignee: "Kanishka Sharma",
-    notes: "Connecting login form to /auth/login and handling token persistence.",
-  },
-  {
-    id: "TSK-303",
-    title: "Cloud Native Microservices Architecture & Container Registry",
-    category: "Cloud Infrastructure",
-    priority: "Normal",
-    progress: 78,
-    dueDate: "Friday",
-    status: "in-progress",
-    assignee: "Kanishka Sharma",
-    notes: "Configured multi-stage Dockerfile and local compose environment.",
-  },
-  {
-    id: "TSK-304",
-    title: "Automated Vitest & Playwright E2E Flow Coverage",
-    category: "Quality Engineering",
-    priority: "Normal",
-    progress: 100,
-    dueDate: "Sep 18, 2026",
-    status: "completed",
-    assignee: "Kanishka Sharma",
-    notes: "Passed 14 unit tests for rubric score calculations.",
-  },
-  {
-    id: "TSK-305",
-    title: "CI/CD GitHub Actions Workflow for Turbopack Production Build",
-    category: "DevOps",
-    priority: "High",
-    progress: 90,
-    dueDate: "In review",
-    status: "review",
-    assignee: "Dr. Tanaka (Reviewer)",
-    notes: "PR #42 submitted, awaiting final sign-off.",
-  },
-  {
-    id: "TSK-306",
-    title: "Docker Containerization & Multi-stage Buildfile",
-    category: "Cloud Architecture",
-    priority: "Normal",
-    progress: 100,
-    dueDate: "Sep 12, 2026",
-    status: "completed",
-    assignee: "Kanishka Sharma",
-    notes: "Reduced Docker image size to under 120MB using Alpine base.",
-  },
-];
-
-const COURSES = [
-  {
-    id: "c1",
-    title: "Advanced Software Engineering & Clean Architecture",
-    provider: "Coursera • Duke University",
-    progress: 92,
-    badge: "92% Completed",
-    certificateReady: false,
-    color: "text-primary",
-  },
-  {
-    id: "c2",
-    title: "React Native & Cross-Platform Enterprise UI",
-    provider: "Coursera • Meta",
-    progress: 75,
-    badge: "Module 4 of 5",
-    certificateReady: false,
-    color: "text-sky-600",
-  },
-  {
-    id: "c3",
-    title: "Data Structures & Algorithmic Problem Solving",
-    provider: "Coursera • Stanford Online",
-    progress: 100,
-    badge: "Verified Certificate 🏅",
-    certificateReady: true,
-    color: "text-emerald-700",
-  },
-  {
-    id: "c4",
-    title: "Cloud Microservices & Distributed Event Systems",
-    provider: "Coursera • AWS Training",
-    progress: 60,
-    badge: "3 Modules Left",
-    certificateReady: false,
-    color: "text-purple-600",
-  },
-];
+const COURSES: Array<{
+  id: string;
+  title: string;
+  provider: string;
+  progress: number;
+  badge: string;
+  certificateReady: boolean;
+  color: string;
+}> = [];
 
 export default function StudentLearningProgressPage() {
   const [selectedJourney, setSelectedJourney] = useState<"internship" | "cloud">("internship");
   const [taskFilter, setTaskFilter] = useState<"all" | "in-progress" | "review" | "completed">("all");
-  const [tasks, setTasks] = useState<TaskItem[]>(INITIAL_TASKS);
+  const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [searchQuery, setSearchQuery] = useState("");
 
   useEffect(() => {
     fetchStudentTasks().then((res) => {
-      if (res && res.items && res.items.length > 0) {
+      if (res && res.items) {
         const liveItems: TaskItem[] = res.items.map((item) => ({
           id: item.id,
           title: item.title,
           category: item.workflow_name || "Manager Workflow",
-          priority: "High",
+          priority: (item.priority ? (item.priority.charAt(0).toUpperCase() + item.priority.slice(1)) : "Normal") as "High" | "Urgent" | "Normal",
           progress: item.status === "completed" ? 100 : item.status === "in_progress" ? 50 : 0,
           dueDate: item.due_date || "Active Sprint",
-          status: item.status === "completed" ? "completed" : item.status === "in_progress" ? "in-progress" : "in-progress",
+          status: item.status === "completed" ? "completed" : item.status === "submitted" ? "review" : "in-progress",
           assignee: item.assigned_by_name || "Manager",
           notes: item.description || "Assigned via workflow task",
         }));
-        setTasks((prev) => {
-          const liveIds = new Set(liveItems.map((i) => i.id));
-          return [...liveItems, ...prev.filter((p) => !liveIds.has(p.id))];
-        });
+        setTasks(liveItems);
       }
     }).catch((err) => console.warn("Could not load student live tasks:", err));
   }, []);

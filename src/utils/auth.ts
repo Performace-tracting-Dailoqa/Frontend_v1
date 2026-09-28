@@ -28,6 +28,10 @@ export interface UserDetail {
   name?: string | null;
   is_active: boolean;
   must_change_password: boolean;
+  /** Sign-in provider bound to this identity: "password" or "microsoft". */
+  auth_provider?: string | null;
+  created_at?: string | null;
+  last_updated_at?: string | null;
   role: UserRole;
   profile?: UserProfile | null;
   scope?: UserScope | null;

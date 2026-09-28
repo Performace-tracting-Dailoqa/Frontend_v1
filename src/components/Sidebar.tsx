@@ -5,6 +5,7 @@ import Link from "next/link";
 import Image from "next/image";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { getAuthSession, apiLogout, UserSession } from "@/utils/auth";
+import { SUPER_ADMIN_TABS } from "@/components/super-admin/types";
 
 interface NavItem {
   label: string;
@@ -93,31 +94,19 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
   if (norm.includes("admin")) {
     return [
       {
-        title: "Platform Overview",
-        items: [
-          { label: "Overview & Sandbox", href: "/dashboard/super-admin", icon: "dashboard" },
-          { label: "Organisations", href: "/dashboard/super-admin?tab=organisations", icon: "corporate_fare" },
-          { label: "Global People", href: "/dashboard/super-admin?tab=users", icon: "group" },
-          { label: "Progress Oversight", href: "/dashboard/super-admin?tab=progress", icon: "monitoring" },
-          { label: "Google Calendar", href: "/dashboard/super-admin?tab=calendar", icon: "calendar_month" },
-        ],
-      },
-      {
-        title: "Security & Governance",
-        items: [
-          { label: "Access Control", href: "/dashboard/super-admin?tab=roles", icon: "security" },
-          { label: "Audit Ledger", href: "/dashboard/super-admin?tab=audit", icon: "receipt_long" },
-          { label: "System Settings", href: "/dashboard/super-admin?tab=settings", icon: "settings" },
-          { label: "Profile & Keys", href: "/dashboard/super-admin?tab=profile", icon: "account_circle" },
-        ],
-      },
-      {
-        title: "Operations & Portals",
-        items: [
-          { label: "Portals View-As", href: "/dashboard/super-admin?tab=portals", icon: "switch_account" },
-          { label: "Teams & Gantt", href: "/dashboard/super-admin?tab=reports", icon: "insights" },
-          { label: "Alerts & Approvals", href: "/dashboard/super-admin?tab=notifications", icon: "notifications" },
-        ],
+        title: "System Administration",
+        // Derived from the dashboard's own tab list, so the sidebar can never
+        // point at a page that no longer exists. Overview deliberately keeps a
+        // query-less href — that is what makes it the default route, and it is
+        // what the active-state check in the component keys on.
+        items: SUPER_ADMIN_TABS.map((tab) => ({
+          label: tab.label,
+          href:
+            tab.key === "overview"
+              ? "/dashboard/super-admin"
+              : `/dashboard/super-admin?tab=${tab.key}`,
+          icon: tab.icon,
+        })),
       },
     ];
   }
@@ -184,11 +173,18 @@ export default function Sidebar({
       )}
 
       <aside
+        // Fixed at every breakpoint, not just mobile. The previous `lg:static`
+        // put the aside back into normal flow, so as a stretched flex item it
+        // grew to the full page height and scrolled away with the content.
+        // `lg:static` was also the reason this diverged from StudentSidebar,
+        // which pins itself and lets the layout reserve the width instead.
+        // The width the layout reserves is in DashboardLayout; the two must
+        // agree (w-72 expanded, lg:w-20 collapsed).
         className={`fixed top-0 bottom-0 left-0 z-50 ${
           isCollapsed ? "w-72 lg:w-20" : "w-72"
         } bg-white border-r border-slate-200/80 flex flex-col justify-between transition-all duration-300 lg:translate-x-0 ${
           isOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:static lg:z-auto`}
+        }`}
       >
         {/* Top Header / Branding */}
         <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : "justify-between"} border-b border-slate-200/80`}>

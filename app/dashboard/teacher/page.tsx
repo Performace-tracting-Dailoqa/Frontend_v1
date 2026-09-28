@@ -29,7 +29,7 @@ function TeacherDashboardContent() {
   };
 
   return (
-    <ProtectedRoute allowedRoles={["teacher", "mentor"]}>
+    <ProtectedRoute allowedRoles={["teacher", "mentor", "instructor"]}>
       {(session) => {
         const teacherProfile = session.profile;
         const teacherScope = session.scope;

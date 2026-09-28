@@ -1,5 +1,6 @@
 "use client";
 
+
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
@@ -59,7 +60,7 @@ export default function Header({
 
       {/* Right: View Switcher & Quick Actions */}
       <div className="flex items-center gap-2 lg:gap-4">
-        {/* Direct Authentication quick link */}
+                {/* Direct Authentication quick link */}
         <Link
           href="/login"
           className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-container hover:bg-surface-container-high text-xs font-semibold text-on-surface border border-outline-variant/40 transition-colors"

@@ -33,13 +33,6 @@ export interface UserDetail {
   scope?: UserScope | null;
 }
 
-/**
- * Unified client-side session. After the Microsoft SSO migration the
- * authoritative credential is the HttpOnly `pms_session` cookie — this object
- * intentionally carries NO token for cookie sessions (`token === ""`).
- * A legacy Bearer-token session may still be present for the forced
- * password-change flow only (Supabase change-password requires the Supabase token).
- */
 export interface UserSession {
   token: string;
   tokenType: string;
@@ -66,18 +59,13 @@ export interface LoginResponseData {
   };
 }
 
-// New cookie-session metadata store: user/profile/scope ONLY, never a token.
 const PROFILE_SESSION_KEY = "dailoqa_pms_profile_session";
-// Legacy Bearer-token store, retained ONLY for the forced password-change flow
-// (Supabase Auth's change-password requires the Supabase access token).
 const LEGACY_TOKEN_SESSION_KEY = "dailoqa_pms_auth_session";
 
-/** Error code returned by GET /api/v1/auth/me when the user has no role assigned yet. */
 export const PENDING_ROLE_CODE = "MISSING_ROLE_MAPPING";
 
 export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
-    // In browser context, relative URLs route through Next.js rewrites (zero CORS hurdles)
     return "";
   }
   return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
@@ -109,19 +97,15 @@ export function getAuthSession(): UserSession | null {
 
 export function saveAuthSession(session: UserSession): void {
   if (typeof window !== "undefined") {
-    // Bearer-token sessions (forced password-change flow) stay in the legacy key.
     if (session.token) {
       localStorage.setItem(LEGACY_TOKEN_SESSION_KEY, JSON.stringify(session));
+      localStorage.setItem(PROFILE_SESSION_KEY, JSON.stringify(session));
       return;
     }
     saveProfileSession(session.user);
   }
 }
 
-/**
- * Stores ONLY profile metadata (never a token). The pms_session HttpOnly cookie
- * is the credential for Microsoft SSO sessions and password sessions alike.
- */
 export function saveProfileSession(user: UserDetail): void {
   if (typeof window === "undefined") return;
   const session: UserSession = {
@@ -149,13 +133,12 @@ export function isUserLoggedIn(): boolean {
   return getAuthSession() !== null;
 }
 
-/** Starts the Microsoft Entra OIDC login by redirecting to the backend-initiated flow. */
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
+  clearAuthSession();
   window.location.assign("/api/auth/microsoft");
 }
 
-/** Maps structured Microsoft OAuth error codes from /login?error=<code> to user-facing text. */
 export function getLoginErrorMessage(code?: string | null): string {
   switch (code) {
     case "INVALID_STATE":
@@ -173,9 +156,6 @@ export function getLoginErrorMessage(code?: string | null): string {
   }
 }
 
-/**
- * Maps backend role name from /auth/me to appropriate dashboard route.
- */
 export function getRoleDashboardPath(roleName?: string | null): string {
   if (!roleName) return "/student/dashboard";
   const normalized = roleName.trim().toLowerCase();
@@ -225,9 +205,6 @@ function extractDetailMessage(data: unknown, fallback: string): { message: strin
   return { message, code };
 }
 
-/**
- * Executes POST /api/v1/auth/login against backend.
- */
 export async function apiLogin(identifier: string, password: string): Promise<LoginResponseData> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/login`;
@@ -257,11 +234,6 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
   return data as LoginResponseData;
 }
 
-/**
- * Retrieves the authenticated user profile WITHOUT sending a Bearer token —
- * the HttpOnly pms_session cookie authenticates the request. Microsoft SSO and
- * cookie-password sessions both use this path.
- */
 export async function fetchMe(): Promise<UserDetail> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/me`;
@@ -287,10 +259,6 @@ export async function fetchMe(): Promise<UserDetail> {
   return data as UserDetail;
 }
 
-/**
- * Executes GET /api/v1/auth/me. Sends the Bearer token only when one is
- * provided (legacy Supabase-token sessions); otherwise the cookie is used.
- */
 export async function apiGetMe(token?: string | null): Promise<UserDetail> {
   if (!token) {
     return fetchMe();
@@ -321,12 +289,6 @@ export async function apiGetMe(token?: string | null): Promise<UserDetail> {
   return data as UserDetail;
 }
 
-/**
- * Executes POST /api/v1/auth/change-password against backend.
- * Cookie-aware: a request with no stored token still authenticates via the
- * pms_session cookie (the forced password-change flow keeps a transient
- * Supabase token, which is used here as an Authorization header).
- */
 export async function apiChangePassword(
   newPassword: string,
   confirmPassword?: string,
@@ -367,7 +329,6 @@ export async function apiChangePassword(
     let code = "PASSWORD_CHANGE_ERROR";
     const detail = (data as Record<string, unknown>)?.detail;
     if (detail) {
-      // Pydantic validation errors return detail as an array: [{loc, msg, type}]
       if (Array.isArray(detail) && detail.length > 0) {
         const firstErr = detail[0] as { msg?: string };
         message = firstErr.msg ? firstErr.msg.replace(/^Value error,?\s*/i, "") : message;
@@ -391,10 +352,6 @@ export async function apiChangePassword(
   return data;
 }
 
-/**
- * Executes POST /api/v1/auth/logout against backend and clears local session.
- * Works for BOTH Bearer sessions (token header) and cookie sessions (no header).
- */
 export async function apiLogout(): Promise<void> {
   const token = getAuthToken();
   const baseUrl = getApiBaseUrl();
@@ -406,7 +363,7 @@ export async function apiLogout(): Promise<void> {
       credentials: "same-origin",
     });
   } catch {
-    // Ignore network errors during logout to guarantee client cleanup
+    // Ignore network errors during logout
   }
   clearAuthSession();
 }

@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import CountUp from "@/components/animations/CountUp";
+import { fetchStudentTasks, updateStudentTaskStatus } from "@/services/workflowService";
 
 interface TaskItem {
   id: string;
@@ -131,6 +132,28 @@ export default function StudentLearningProgressPage() {
   const [tasks, setTasks] = useState<TaskItem[]>(INITIAL_TASKS);
   const [searchQuery, setSearchQuery] = useState("");
 
+  useEffect(() => {
+    fetchStudentTasks().then((res) => {
+      if (res && res.items && res.items.length > 0) {
+        const liveItems: TaskItem[] = res.items.map((item) => ({
+          id: item.id,
+          title: item.title,
+          category: item.workflow_name || "Manager Workflow",
+          priority: "High",
+          progress: item.status === "completed" ? 100 : item.status === "in_progress" ? 50 : 0,
+          dueDate: item.due_date || "Active Sprint",
+          status: item.status === "completed" ? "completed" : item.status === "in_progress" ? "in-progress" : "in-progress",
+          assignee: item.assigned_by_name || "Manager",
+          notes: item.description || "Assigned via workflow task",
+        }));
+        setTasks((prev) => {
+          const liveIds = new Set(liveItems.map((i) => i.id));
+          return [...liveItems, ...prev.filter((p) => !liveIds.has(p.id))];
+        });
+      }
+    }).catch((err) => console.warn("Could not load student live tasks:", err));
+  }, []);
+
   // Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [activeTaskToUpdate, setActiveTaskToUpdate] = useState<TaskItem | null>(null);
@@ -157,6 +180,8 @@ export default function StudentLearningProgressPage() {
     e.preventDefault();
     if (!activeTaskToUpdate) return;
 
+    const nextStatus = updatePercent === 100 ? "completed" : "in-progress";
+
     setTasks((prev) =>
       prev.map((t) =>
         t.id === activeTaskToUpdate.id
@@ -164,17 +189,25 @@ export default function StudentLearningProgressPage() {
               ...t,
               progress: updatePercent,
               notes: updateNotes,
-              status: updatePercent === 100 ? "completed" : t.status,
+              status: nextStatus,
             }
           : t
       )
     );
 
+    // Call backend API if it's a real database task
+    if (activeTaskToUpdate.id.includes("-")) {
+      updateStudentTaskStatus(
+        activeTaskToUpdate.id,
+        updatePercent === 100 ? "completed" : "in_progress"
+      ).catch((err) => console.warn("Failed to persist task update:", err));
+    }
+
     setUpdateSuccess(true);
     setTimeout(() => {
       setUpdateSuccess(false);
       setIsModalOpen(false);
-    }, 1200);
+    }, 800);
   };
 
   const priorityColors = {

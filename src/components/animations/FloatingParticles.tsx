@@ -11,6 +11,7 @@ interface Particle {
   duration: number;
   delay: number;
   color: string;
+  driftX: number;
 }
 
 export default function FloatingParticles({
@@ -34,9 +35,13 @@ export default function FloatingParticles({
         duration: Math.random() * 5 + 4,
         delay: Math.random() * 3,
         color: colors[Math.floor(Math.random() * colors.length)],
+        driftX: (Math.random() - 0.5) * 20,
       });
     }
-    setParticles(items);
+    const timer = setTimeout(() => {
+      setParticles(items);
+    }, 0);
+    return () => clearTimeout(timer);
   }, [count]);
 
   return (
@@ -55,7 +60,7 @@ export default function FloatingParticles({
           }}
           animate={{
             y: [0, -30, 0],
-            x: [0, (Math.random() - 0.5) * 20, 0],
+            x: [0, p.driftX, 0],
             opacity: [0.2, 0.9, 0.2],
             scale: [1, 1.4, 1],
           }}

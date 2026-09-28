@@ -88,9 +88,11 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
   },
 ];
 
+type NotificationFilter = "all" | "unread" | "deadline" | "feedback" | "evaluation" | "class" | "report";
+
 export default function StudentNotificationsPage() {
   const [notifications, setNotifications] = useState<NotificationItem[]>(INITIAL_NOTIFICATIONS);
-  const [filter, setFilter] = useState<"all" | "unread" | "deadline" | "feedback" | "evaluation" | "class" | "report">("all");
+  const [filter, setFilter] = useState<NotificationFilter>("all");
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [savedSettingsNotice, setSavedSettingsNotice] = useState(false);
 
@@ -181,7 +183,7 @@ export default function StudentNotificationsPage() {
         ].map((chip) => (
           <button
             key={chip.id}
-            onClick={() => setFilter(chip.id as any)}
+            onClick={() => setFilter(chip.id as NotificationFilter)}
             className={`px-3.5 py-1.5 rounded-full text-xs font-semibold transition-all whitespace-nowrap ${
               filter === chip.id
                 ? "bg-primary text-on-primary shadow-2xs"

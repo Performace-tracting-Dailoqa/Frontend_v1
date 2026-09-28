@@ -79,8 +79,13 @@ export async function fetchSystemTelemetry(): Promise<SystemTelemetryData | null
     const latency = Date.now() - startTime;
     if (!res.ok) return null;
 
+    // The health route answers with the *shape* the backend actually returns:
+    //   { status: "ok", database: { status: "connected", table, record_count } }
+    // A failed DB probe raises inside verify_supabase_connection(), so the route
+    // 500s and we have already bailed out above - `database.status` is the only
+    // "is it really up" signal, not merely the presence of a `database` key.
     const data = await res.json();
-    const isDbConnected = data.database === true;
+    const isDbConnected = data?.status === "ok" && data?.database?.status === "connected";
 
     return {
       status: isDbConnected ? "Operational" : "Degraded",

@@ -14,6 +14,7 @@ import {
   TrendBatch,
 } from "@/services/insightsService";
 import TrendChart, { trendSeriesColor } from "../TrendChart";
+import ProgressChartsRow from "../ProgressChartsRow";
 import {
   EmptyState,
   ErrorState,
@@ -500,23 +501,7 @@ export default function ProgressTab() {
         )}
       </SectionCard>
 
-      <SectionCard title="Overall completion" subtitle="Every workflow task across all batches" icon="donut_large">
-        <ProgressBar value={data.overall.completion_percentage} />
-        <div className="flex flex-wrap gap-2 mt-4">
-          <Pill tone="emerald">
-            <span className="material-symbols-outlined text-[13px]">check_circle</span>
-            {data.overall.tasks_completed} done
-          </Pill>
-          <Pill tone="slate">
-            <span className="material-symbols-outlined text-[13px]">list_alt</span>
-            {data.overall.tasks - data.overall.tasks_completed} outstanding
-          </Pill>
-          <Pill tone={data.overall.tasks_overdue > 0 ? "rose" : "slate"}>
-            <span className="material-symbols-outlined text-[13px]">schedule</span>
-            {data.overall.tasks_overdue} overdue
-          </Pill>
-        </div>
-      </SectionCard>
+      <ProgressChartsRow teams={data.teams} overall={data.overall} />
 
       {data.teams.length === 0 ? (
         <EmptyState

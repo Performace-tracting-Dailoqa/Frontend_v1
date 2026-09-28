@@ -86,15 +86,17 @@ function SuperAdminDashboardContent() {
         return (
           <DashboardLayout>
             <div className="space-y-6 max-w-7xl mx-auto pb-16">
-              <SuperAdminHeader
-                displayName={displayName}
-                roleName={current?.role.name || session.role?.name || "Super Admin"}
-                scopeType={current?.scopeType || session.scope?.scope_type || "system_wide"}
-                authProvider={current?.authProvider ?? session.user.auth_provider ?? null}
-                telemetry={telemetry}
-                isRefreshing={isRefreshing}
-                onRefresh={loadTelemetry}
-              />
+              {activeTab === "overview" && (
+                <SuperAdminHeader
+                  displayName={displayName}
+                  roleName={current?.role.name || session.role?.name || "Super Admin"}
+                  scopeType={current?.scopeType || session.scope?.scope_type || "system_wide"}
+                  authProvider={current?.authProvider ?? session.user.auth_provider ?? null}
+                  telemetry={telemetry}
+                  isRefreshing={isRefreshing}
+                  onRefresh={loadTelemetry}
+                />
+              )}
 
               {/* Navigation lives in the sidebar only. This heading exists purely
                   so a deep-linked or refreshed page still says which of the seven

@@ -105,3 +105,117 @@ export async function fetchAllBatchLearners(batchId: string): Promise<BatchLearn
 
   return [...seen.values()];
 }
+
+// ---------------------------------------------------------------------------
+// Batch Full Details (Workflows, Workflow Tasks, Evaluations, Students)
+// ---------------------------------------------------------------------------
+
+export interface BatchStudentItem {
+  id: string;
+  user_id: string;
+  name: string | null;
+  email: string | null;
+  enrollment_no: string | null;
+  department: string | null;
+  joining_date: string | null;
+  status: string | null;
+  is_active: boolean;
+}
+
+export interface BatchWorkflowItem {
+  id: string;
+  batch_id?: string | null;
+  manager_id?: string | null;
+  manager_name?: string | null;
+  title: string;
+  description?: string | null;
+  status?: string | null;
+  task_count: number;
+  completed_task_count: number;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at?: string | null;
+}
+
+export interface BatchMetricItem {
+  id?: string | null;
+  name: string;
+  description?: string | null;
+  score?: number | null;
+  full_score?: number | null;
+  weightage?: number | null;
+  weighted_score?: number | null;
+  remarks?: string | null;
+}
+
+export interface BatchTaskEvaluationItem {
+  id: string;
+  workflow_task_id: string;
+  evaluator_name?: string | null;
+  total_score?: number | null;
+  max_score?: number | null;
+  percentage?: number | null;
+  status?: string | null;
+  remarks?: string | null;
+  evaluated_at?: string | null;
+  metrics: BatchMetricItem[];
+}
+
+export interface BatchTaskItem {
+  id: string;
+  workflow_id?: string | null;
+  workflow_title?: string | null;
+  student_id?: string | null;
+  student_name?: string | null;
+  student_email?: string | null;
+  enrollment_no?: string | null;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  submitted_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+  evaluation?: BatchTaskEvaluationItem | null;
+}
+
+export interface BatchFullDetails {
+  batch: {
+    id: string;
+    name: string;
+    department?: string | null;
+    status?: string | null;
+    start_date?: string | null;
+    end_date?: string | null;
+    manager_id?: string | null;
+    teacher_id?: string | null;
+    created_at?: string | null;
+    updated_at?: string | null;
+  };
+  manager?: { id?: string | null; name?: string | null; email?: string | null } | null;
+  teacher?: { id?: string | null; name?: string | null; email?: string | null } | null;
+  summary: {
+    student_count: number;
+    workflow_count: number;
+    task_count: number;
+    completed_tasks: number;
+    in_progress_tasks: number;
+    pending_tasks: number;
+    overdue_tasks: number;
+    completion_rate: number;
+  };
+  students: BatchStudentItem[];
+  workflows: BatchWorkflowItem[];
+  tasks: BatchTaskItem[];
+}
+
+export async function fetchBatchFullDetails(batchId: string): Promise<BatchFullDetails> {
+  return apiJson<BatchFullDetails>(
+    `/api/v1/batches/${batchId}/details`,
+    { cache: "no-store" },
+    "Could not load batch details"
+  );
+}
+

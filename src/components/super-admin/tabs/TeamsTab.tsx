@@ -29,6 +29,7 @@ import {
   StatCard,
   UnavailableState,
 } from "../SuperAdminUi";
+import BatchDetailPage from "../BatchDetailPage";
 
 interface TeamsTabProps {
   onOpenAddPerson: () => void;
@@ -338,11 +339,11 @@ function teamStatusLabel(team: TeamRecord): string {
 function TeamsTabContent({
   data,
   onOpenAddPerson,
-  onOpenRoster,
+  onOpenBatchDetail,
 }: {
   data: SuperuserTeamList;
   onOpenAddPerson: () => void;
-  onOpenRoster: (team: TeamRecord) => void;
+  onOpenBatchDetail: (team: TeamRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(data.items[0]?.id ?? null);
 
@@ -377,7 +378,16 @@ function TeamsTabContent({
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <h3 className="text-sm font-bold text-slate-900">{team.name}</h3>
+                      <span
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenBatchDetail(team);
+                        }}
+                        className="text-sm font-bold text-slate-900 hover:text-[#4B2EF5] hover:underline cursor-pointer"
+                        title="Click to open batch workflows, tasks and students"
+                      >
+                        {team.name}
+                      </span>
                       <Pill tone={teamStatusTone(team)}>{teamStatusLabel(team)}</Pill>
                       {team.tasks.overdue > 0 && (
                         <Pill tone="rose">
@@ -418,6 +428,16 @@ function TeamsTabContent({
                     <span className="material-symbols-outlined text-[14px]">badge</span>
                     {team.manager?.name ?? "No manager"}
                   </span>
+                  <span
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onOpenBatchDetail(team);
+                    }}
+                    className="ml-auto text-[11px] font-bold text-[#4B2EF5] hover:underline flex items-center gap-0.5 cursor-pointer"
+                  >
+                    <span>Workflows & tasks</span>
+                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                  </span>
                 </div>
               </motion.button>
             );
@@ -438,29 +458,25 @@ function TeamsTabContent({
             >
               <SectionCard title={selected.name} subtitle={selected.department ?? "No department"} icon="groups">
                 <div className="space-y-4">
-                  {/* The drill-down entry point, placed above the summary numbers
-                      so it reads as the panel's main action rather than one more
-                      field. A headcount alone cannot answer "who is in this
-                      batch", which is the question the panel invites. */}
+                  {/* The drill-down entry point to open Batch Hub */}
                   <button
                     type="button"
-                    onClick={() => onOpenRoster(selected)}
-                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200/80 bg-slate-50 hover:bg-slate-100 hover:border-slate-300 text-left transition-colors cursor-pointer"
+                    onClick={() => onOpenBatchDetail(selected)}
+                    className="w-full flex items-center gap-3 p-3 rounded-xl border border-slate-200/80 bg-slate-50 hover:bg-slate-100 hover:border-[#4B2EF5]/40 text-left transition-colors cursor-pointer group shadow-2xs"
                   >
-                    <span className="w-9 h-9 rounded-lg bg-white border border-slate-200/80 text-slate-500 flex items-center justify-center shrink-0">
-                      <span className="material-symbols-outlined text-lg">groups</span>
+                    <span className="w-9 h-9 rounded-lg bg-white border border-slate-200/80 text-[#4B2EF5] flex items-center justify-center shrink-0 shadow-2xs group-hover:bg-[#4B2EF5] group-hover:text-white transition-colors">
+                      <span className="material-symbols-outlined text-lg">account_tree</span>
                     </span>
                     <span className="min-w-0 flex-1">
-                      <span className="block text-xs font-bold text-slate-900">
-                        View all {selected.student_count} intern
-                        {selected.student_count === 1 ? "" : "s"}
+                      <span className="block text-xs font-bold text-slate-900 group-hover:text-[#4B2EF5] transition-colors">
+                        Open {selected.name} Batch Hub
                       </span>
                       <span className="block text-[11px] text-slate-500">
-                        Open the roster for this batch
+                        Workflows ({selected.workflow_count}) · Tasks ({selected.tasks.total}) · Students ({selected.student_count})
                       </span>
                     </span>
-                    <span className="material-symbols-outlined text-base text-slate-400 shrink-0">
-                      chevron_right
+                    <span className="material-symbols-outlined text-base text-slate-400 group-hover:text-[#4B2EF5] group-hover:translate-x-0.5 transition-all shrink-0">
+                      arrow_forward
                     </span>
                   </button>
 
@@ -602,15 +618,9 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
   const [status, setStatus] = useState("all");
 
   /**
-   * The batch whose roster is open, held as a snapshot rather than an id.
-   *
-   * An id would be looked up in `data.items` on each render, so typing in the
-   * search box could resolve it to `null` and silently drop the user back to the
-   * team list mid-read. A snapshot cannot be invalidated that way. Its numbers
-   * (headcount, completion) are the ones the roll-up reported when it was
-   * opened, which is also the truth at that moment.
+   * The batch whose full detail view (workflows, tasks, evaluations, students) is open.
    */
-  const [rosterTeam, setRosterTeam] = useState<TeamRecord | null>(null);
+  const [detailBatch, setDetailBatch] = useState<TeamRecord | null>(null);
 
   // 100 is the endpoint's hard cap — ask for the most the API will return so the
   // list is only ever short when a filter is genuinely hiding teams.
@@ -623,13 +633,17 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
   const isFiltered = search.trim().length > 0 || status !== "all";
 
   /**
-   * The roster is a page in its own right, so it replaces the whole Teams shell —
-   * header, search box and roll-up counters included. Keeping those visible above
-   * it would leave two `PageIntro` bars and a search field that filters a list
-   * the user can no longer see.
+   * When a batch is selected, render the dedicated BatchDetailPage which shows
+   * workflows, workflow tasks, evaluation metrics, and enrolled students.
    */
-  if (rosterTeam) {
-    return <BatchLearnersPage team={rosterTeam} onBack={() => setRosterTeam(null)} />;
+  if (detailBatch) {
+    return (
+      <BatchDetailPage
+        team={detailBatch}
+        onBack={() => setDetailBatch(null)}
+        onOpenAddPerson={onOpenAddPerson}
+      />
+    );
   }
 
   const body = () => {
@@ -653,7 +667,7 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
       <TeamsTabContent
         data={data}
         onOpenAddPerson={onOpenAddPerson}
-        onOpenRoster={setRosterTeam}
+        onOpenBatchDetail={setDetailBatch}
       />
     );
   };

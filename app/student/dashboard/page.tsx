@@ -131,8 +131,8 @@ export default function StudentDashboardPage() {
     fetchMe().then((me) => {
       const name = me.name || me.email.split("@")[0];
       setUserName(name);
-      if (me.scope?.details?.mentors) {
-        setMentors(me.scope.details.mentors);
+      if (me.scope?.details?.mentors && Array.isArray(me.scope.details.mentors)) {
+        setMentors(me.scope.details.mentors as any);
       }
     }).catch(() => {});
     loadStudentTasks();

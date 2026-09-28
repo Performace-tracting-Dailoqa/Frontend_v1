@@ -5,10 +5,12 @@ import { motion } from "framer-motion";
 import { MOCK_ORGANISATIONS, MOCK_AUDIT_LOGS } from "../mockData";
 import { SystemTelemetryData } from "@/services/adminService";
 
+import { SuperAdminTab } from "../types";
+
 interface OverviewTabProps {
   telemetry: SystemTelemetryData | null;
   totalUsersCount: number;
-  onNavigateTab: (tab: "organisations" | "users" | "audit") => void;
+  onNavigateTab: (tab: SuperAdminTab) => void;
   onSimulate: (role: string, user: string, org: string) => void;
 }
 
@@ -95,6 +97,7 @@ export default function OverviewTab({
             hidden: { opacity: 0, y: 14, scale: 0.96 },
             show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
           }}
+          onClick={() => onNavigateTab("users")}
           whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(13, 148, 136, 0.12)" }}
           className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
         >
@@ -120,6 +123,7 @@ export default function OverviewTab({
             hidden: { opacity: 0, y: 14, scale: 0.96 },
             show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
           }}
+          onClick={() => onNavigateTab("progress")}
           whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.12)" }}
           className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
         >
@@ -226,10 +230,10 @@ export default function OverviewTab({
             </div>
             <button
               type="button"
-              onClick={() => onNavigateTab("organisations")}
+              onClick={() => onNavigateTab("teams")}
               className="text-xs font-bold text-[#4B2EF5] hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <span>View All Tenants</span>
+              <span>View All Teams</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
             </button>
           </div>
@@ -406,10 +410,10 @@ export default function OverviewTab({
           </div>
           <button
             type="button"
-            onClick={() => onNavigateTab("audit")}
+            onClick={() => onNavigateTab("users")}
             className="text-xs font-bold text-[#4B2EF5] hover:underline flex items-center gap-1 cursor-pointer"
           >
-            <span>Open Audit Ledger</span>
+            <span>Open People Directory</span>
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </button>
         </div>

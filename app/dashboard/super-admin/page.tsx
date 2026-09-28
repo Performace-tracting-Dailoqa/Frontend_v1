@@ -29,6 +29,7 @@ import TeamsReportsTab from "@/components/super-admin/tabs/TeamsReportsTab";
 import CalendarTab from "@/components/super-admin/tabs/CalendarTab";
 import NotificationsTab from "@/components/super-admin/tabs/NotificationsTab";
 import ProfileSettingsTab from "@/components/super-admin/tabs/ProfileSettingsTab";
+import AddPersonTab from "@/components/super-admin/tabs/AddPersonTab";
 
 function SuperAdminDashboardContent() {
   const searchParams = useSearchParams();
@@ -232,9 +233,16 @@ function SuperAdminDashboardContent() {
                     <PortalsTab onSimulate={handleActivateSimulation} />
                   )}
 
-                  {activeTab === "reports" && <TeamsReportsTab />}
+                  {(activeTab === "teams" || activeTab === "reports") && <TeamsReportsTab />}
 
                   {activeTab === "calendar" && <CalendarTab />}
+
+                  {activeTab === "add-person" && (
+                    <AddPersonTab
+                      onNavigateTab={(targetTab) => handleTabChange(targetTab)}
+                      onRefreshUsers={loadBackendData}
+                    />
+                  )}
 
                   {activeTab === "notifications" && <NotificationsTab />}
 

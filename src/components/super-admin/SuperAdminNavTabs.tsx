@@ -17,18 +17,13 @@ interface TabDef {
 }
 
 const TABS: TabDef[] = [
-  { key: "overview", label: "Overview & Sandbox", icon: "dashboard" },
-  { key: "organisations", label: "Organisations", icon: "corporate_fare", badge: "4" },
-  { key: "users", label: "Global People", icon: "group", badge: "1.4k" },
-  { key: "progress", label: "Progress Oversight", icon: "monitoring" },
-  { key: "roles", label: "Access Control", icon: "security" },
-  { key: "audit", label: "Audit Ledger", icon: "receipt_long" },
-  { key: "settings", label: "System Settings", icon: "settings" },
-  { key: "portals", label: "Portals View-As", icon: "switch_account" },
-  { key: "reports", label: "Teams & Gantt", icon: "insights" },
-  { key: "calendar", label: "Google Calendar", icon: "calendar_month" },
-  { key: "notifications", label: "Alerts & Approvals", icon: "notifications", badge: "7" },
-  { key: "profile", label: "Profile & Keys", icon: "account_circle" },
+  { key: "overview", label: "Overview", icon: "dashboard" },
+  { key: "teams", label: "Teams", icon: "groups" },
+  { key: "users", label: "People", icon: "group" },
+  { key: "progress", label: "Progress", icon: "monitoring" },
+  { key: "calendar", label: "Microsoft Calendar", icon: "calendar_month" },
+  { key: "add-person", label: "Add Person", icon: "person_add" },
+  { key: "profile", label: "Profile", icon: "account_circle" },
 ];
 
 export default function SuperAdminNavTabs({

@@ -20,9 +20,12 @@
 | `GET /api/v1/microsoft/calendar/status` | Config/connectivity probe, never 500s |
 | `GET /api/v1/microsoft/calendar/events` | `calendarView` events; 424 for config gaps |
 | `PUT /api/v1/auth/me` | Self-service **name** only |
+| `GET /api/v1/batches` | Every batch, for the Add Person batch picker |
+| `POST /api/v1/batches` | Create a batch from the picker's inline "New batch" |
 
 New files: `insights_repository.py`, `insights_service.py`, `schemas/insights.py`,
-`routes/superuser/insights.py`, `core/microsoft_graph.py`, `routes/microsoft/calendar.py`.
+`routes/superuser/insights.py`, `core/microsoft_graph.py`, `routes/microsoft/calendar.py`,
+`routes/superuser/batchap.py`, `migrations/versions/0003_profile_batch_id.py`.
 
 Modified: `core/config.py` (4 Graph settings), `api/router.py`, `routes/auth/routes.py`,
 `services/auth_service.py`, `schemas/users.py`, `dependencies/auth.py`.
@@ -39,7 +42,7 @@ URL parameter and the page shell, so they cannot disagree about what pages exist
 | People | `fetchDirectory` → HR/manager/teacher/student list endpoints |
 | Progress | `GET /superuser/progress` |
 | Microsoft Calendar | `GET /microsoft/calendar/{status,events}` |
-| Add Person | `POST /{hr,managers,teachers,students}` |
+| Add Person | `POST /{hr,managers,teachers,students}`, plus `GET`/`POST /batches` for the batch picker |
 | Profile | `GET`/`PUT /auth/me` |
 
 New: `apiClient.ts`, `insightsService.ts`, `calendarService.ts`, `useAsyncData.ts`,
@@ -71,6 +74,13 @@ and "Create Organisation" button went with it.
   bound to a Microsoft object id, so changing it needs admin re-provisioning.
 - **"Intern" is a `students` row.** The PMS has no intern entity, so the UI labels
   the bucket "Intern" while the record is a student with an enrollment number.
+- **Batch membership is not batch leadership.** `batches.teacher_id` /
+  `batches.manager_id` record who *leads* a team — one per batch, and overwriting
+  them would silently strip an existing lead. Managers and teachers therefore had
+  no way to record which team they work with, so migration `0003` adds
+  `teachers.batch_id` and `managers.batch_id`, mirroring `students.batch_id` from
+  `0001`. The Add Person picker writes that column; it never touches the lead FKs.
+  HR has no batch column, so the picker is hidden for that role.
 - **Unreachable calendar returns a state, not an error.** The UI shows a setup panel
   with the exact missing configuration instead of an empty calendar.
 - **Every failure is a state.** Pages render explicit loading / empty / error /

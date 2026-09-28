@@ -208,6 +208,59 @@ export async function fetchDirectory(): Promise<{
 }
 
 // ---------------------------------------------------------------------------
+// Batch picker
+// ---------------------------------------------------------------------------
+
+/**
+ * One row of `GET /api/v1/batches`, trimmed to what a picker renders.
+ *
+ * Deliberately not the teacher-scoped `fetchTeacherBatches` from
+ * `workflowService`: that only returns the *signed-in teacher's* batches, so it
+ * would hide every batch a superuser is entitled to place an intern into.
+ */
+export interface BatchOption {
+  id: string;
+  name: string;
+  department: string | null;
+  status: string | null;
+}
+
+/**
+ * Load every existing batch, for the Add Person intern dropdown.
+ *
+ * Ordering is the backend's (alphabetical by name). A failure is raised as an
+ * `ApiError` so the caller can offer a retry rather than silently showing an
+ * empty dropdown that looks like "there are no batches".
+ */
+export async function fetchBatchOptions(): Promise<BatchOption[]> {
+  const items = await apiJson<BatchOption[]>(
+    "/api/v1/batches",
+    { cache: "no-store" },
+    "Could not load batches"
+  );
+  return items || [];
+}
+
+/**
+ * Create a batch from the Add Person form, without pre-assigning a lead.
+ *
+ * The picker's contract is "make a team and put this person in it", so the
+ * caller links the new person through their own profile `batch_id` rather than
+ * claiming the batch's `teacher_id` / `manager_id` lead slot.
+ */
+export async function createBatch(payload: {
+  name: string;
+  department?: string;
+  status?: string;
+}): Promise<BatchOption> {
+  return apiJson<BatchOption>(
+    "/api/v1/batches",
+    { method: "POST", body: JSON.stringify(payload) },
+    "Could not create the batch"
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Mutations
 // ---------------------------------------------------------------------------
 
@@ -218,6 +271,11 @@ export type CreatePersonPayload = {
   department?: string;
   specialization?: string;
   enrollment_no?: string;
+  /**
+   * Batch to place the person in. Only sent for the `Manager`, `Teacher` and
+   * `Intern` roles — HR profiles have no batch column.
+   */
+  batch_id?: string;
 };
 
 /** Provision a person, routing to the API that owns their role profile. */
@@ -236,6 +294,7 @@ export async function createBackendUser(payload: CreatePersonPayload): Promise<D
           name: payload.name,
           email: payload.email,
           department: payload.department,
+          batch_id: payload.batch_id,
         });
       case "Teacher":
         return createTeacher({
@@ -243,6 +302,7 @@ export async function createBackendUser(payload: CreatePersonPayload): Promise<D
           email: payload.email,
           department: payload.department,
           specialization: payload.specialization,
+          batch_id: payload.batch_id,
         });
       case "Intern":
         return createStudent({
@@ -250,6 +310,7 @@ export async function createBackendUser(payload: CreatePersonPayload): Promise<D
           email: payload.email,
           department: payload.department,
           enrollment_no: payload.enrollment_no,
+          batch_id: payload.batch_id,
         });
     }
   })();

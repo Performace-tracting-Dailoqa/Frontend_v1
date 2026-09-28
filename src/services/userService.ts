@@ -8,6 +8,11 @@ export interface BaseUserPayload {
   department?: string;
   specialization?: string;
   enrollment_no?: string;
+  /**
+   * Batch membership. Supported by students, teachers and managers — the column
+   * was added to teachers/managers in migration 0003. HR profiles have no batch.
+   */
+  batch_id?: string | null;
 }
 
 export interface UserProfileResponse {
@@ -89,7 +94,7 @@ export async function fetchManagerList(page = 1, pageSize = 100, department?: st
   return { ...data, items: (data.items || []).map((i) => ({ ...i, role_name: "Manager" })) };
 }
 
-export async function createManager(payload: { email: string; name: string; department?: string }): Promise<UserProfileResponse> {
+export async function createManager(payload: { email: string; name: string; department?: string; batch_id?: string }): Promise<UserProfileResponse> {
   return apiJson<UserProfileResponse>(
     "/api/v1/managers",
     { method: "POST", body: JSON.stringify(payload) },
@@ -125,7 +130,7 @@ export async function fetchTeacherList(page = 1, pageSize = 100, department?: st
   return { ...data, items: (data.items || []).map((i) => ({ ...i, role_name: "Teacher" })) };
 }
 
-export async function createTeacher(payload: { email: string; name: string; department?: string; specialization?: string }): Promise<UserProfileResponse> {
+export async function createTeacher(payload: { email: string; name: string; department?: string; specialization?: string; batch_id?: string }): Promise<UserProfileResponse> {
   return apiJson<UserProfileResponse>(
     "/api/v1/teachers",
     { method: "POST", body: JSON.stringify(payload) },
@@ -165,7 +170,7 @@ export async function fetchStudentList(page = 1, pageSize = 100, department?: st
   return { ...data, items: (data.items || []).map((i) => ({ ...i, role_name: "Student" })) };
 }
 
-export async function createStudent(payload: { email: string; name: string; department?: string; enrollment_no?: string }): Promise<UserProfileResponse> {
+export async function createStudent(payload: { email: string; name: string; department?: string; enrollment_no?: string; batch_id?: string }): Promise<UserProfileResponse> {
   return apiJson<UserProfileResponse>(
     "/api/v1/students",
     { method: "POST", body: JSON.stringify(payload) },

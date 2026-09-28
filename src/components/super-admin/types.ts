@@ -1,16 +1,18 @@
 export type SuperAdminTab =
   | "overview"
-  | "organisations"
+  | "teams"
   | "users"
   | "progress"
+  | "calendar"
+  | "add-person"
+  | "profile"
+  | "organisations"
   | "roles"
   | "audit"
   | "settings"
   | "portals"
   | "reports"
-  | "calendar"
-  | "notifications"
-  | "profile";
+  | "notifications";
 
 export interface SimulationState {
   isActive: boolean;

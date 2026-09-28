@@ -13,7 +13,7 @@ interface CalendarEvent {
   date: string; // e.g. "Oct 19, 2026"
   category: "infrastructure" | "workshop" | "evaluation" | "sync" | "billing";
   categoryLabel: string;
-  googleMeetUrl?: string;
+  microsoftTeamsUrl?: string;
   attendees: Array<{ name: string; email: string; initials: string }>;
   description?: string;
 }
@@ -53,7 +53,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     date: "Oct 8, 2026",
     category: "workshop",
     categoryLabel: "Batch Workshop",
-    googleMeetUrl: "https://meet.google.com/abc-mirai-n3",
+    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/abc-mirai-n3",
     description: "Oral business Japanese keigo masterclass with peer evaluations.",
     attendees: [
       { name: "Prof. Arthur Vance", email: "vance@mirai.ac.jp", initials: "AV" },
@@ -83,7 +83,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     date: "Oct 15, 2026",
     category: "workshop",
     categoryLabel: "Evaluation Review",
-    googleMeetUrl: "https://meet.google.com/kda-prog-rev",
+    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/kda-prog-rev",
     description: "Cross-department performance checkpoints and mentor ratings.",
     attendees: [
       { name: "Samantha Vance", email: "s.vance@kyotodigital.edu", initials: "SV" },
@@ -98,7 +98,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     date: "Oct 19, 2026",
     category: "sync",
     categoryLabel: "Superuser Direct",
-    googleMeetUrl: "https://meet.google.com/sre-super-sync",
+    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/sre-super-sync",
     description: "Bi-weekly superuser cross-tenant performance check and database metrics.",
     attendees: [
       { name: "Marcus Brody", email: "admin@dailoqa.com", initials: "MB" },
@@ -128,7 +128,7 @@ const INITIAL_EVENTS: CalendarEvent[] = [
     date: "Oct 26, 2026",
     category: "workshop",
     categoryLabel: "Cohort Exam",
-    googleMeetUrl: "https://meet.google.com/mirai-n2-exam",
+    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/mirai-n2-exam",
     description: "Faculty proctored oral evaluation with Teams recordings enabled.",
     attendees: [
       { name: "Prof. Arthur Vance", email: "vance@mirai.ac.jp", initials: "AV" },
@@ -268,7 +268,7 @@ export default function CalendarTab() {
     setTimeout(() => {
       setIsSyncing(false);
       setLastSyncTime("Just now");
-      showToast("Google Workspace bi-directional calendar sync verified.");
+      showToast("Microsoft Graph bi-directional calendar sync verified.");
     }, 1100);
   };
 
@@ -293,7 +293,7 @@ export default function CalendarTab() {
           : newCategory === "evaluation"
           ? "Evaluation Cycle"
           : "Platform Maintenance",
-      googleMeetUrl: `https://meet.google.com/${Math.random().toString(36).substring(2, 6)}-${Math.random().toString(36).substring(2, 6)}`,
+      microsoftTeamsUrl: `https://teams.microsoft.com/l/meetup-join/${Math.random().toString(36).substring(2, 6)}`,
       attendees: [
         { name: "Marcus Brody", email: "admin@dailoqa.com", initials: "MB" },
         { name: "Staff Member", email: "staff@dailoqa.com", initials: "SM" },
@@ -310,7 +310,7 @@ export default function CalendarTab() {
   const handleDeleteEvent = (id: string) => {
     setEvents((prev) => prev.filter((e) => e.id !== id));
     setSelectedEvent(null);
-    showToast("Event cancelled and removed from Google Calendar.");
+    showToast("Event cancelled and removed from Microsoft Calendar.");
   };
 
   const filteredEvents = events.filter((evt) => {
@@ -344,14 +344,14 @@ export default function CalendarTab() {
       <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
         <div className="flex flex-col space-y-1.5 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Google Calendar</h1>
+            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Microsoft Calendar</h1>
             <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold tracking-wide">
               SUPERUSER OVERLAY
             </span>
             <span className="text-xs text-slate-400 font-medium">· Last synced {lastSyncTime}</span>
           </div>
           <p className="text-xs text-slate-500 max-w-3xl">
-            Platform-wide meetings, evaluation deadlines, and system telemetry events synchronized bi-directionally with Google Workspace Enterprise.
+            Signed-in Superuser Microsoft Calendar view. Backend Graph API sync displays events once endpoint is active.
           </p>
         </div>
 
@@ -359,11 +359,11 @@ export default function CalendarTab() {
         <div className="flex flex-wrap items-center gap-3">
           {/* Status Badge */}
           <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs shadow-2xs">
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
-              <path d="M23.745 12.27c0-.7-.06-1.4-.19-2.07H12v4.51h6.6c-.29 1.52-1.14 2.8-2.4 3.65v3.03h3.88c2.28-2.1 3.665-5.18 3.665-9.12z" fill="#4285F4" />
-              <path d="M12 24c3.24 0 5.95-1.08 7.93-2.91l-3.88-3.03c-1.08.72-2.45 1.16-4.05 1.16-3.12 0-5.77-2.1-6.72-4.93H1.24v3.13C3.26 21.4 7.36 24 12 24z" fill="#34A853" />
-              <path d="M5.28 14.29c-.25-.72-.38-1.49-.38-2.29s.14-1.57.38-2.29V6.58H1.24C.45 8.15 0 9.92 0 12s.45 3.85 1.24 5.42l4.04-3.13z" fill="#FBBC05" />
-              <path d="M12 4.75c1.77 0 3.35.61 4.6 1.8l3.42-3.42C17.95 1.19 15.24 0 12 0 7.36 0 3.26 2.6 1.24 6.58l4.04 3.13c.95-2.83 3.6-4.96 6.72-4.96z" fill="#EA4335" />
+            <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
+              <path fill="#f35325" d="M1 1h10v10H1z"/>
+              <path fill="#81bc06" d="M12 1h10v10H12z"/>
+              <path fill="#05a6f0" d="M1 12h10v10H1z"/>
+              <path fill="#ffba08" d="M12 12h10v10H12z"/>
             </svg>
             <span className="relative flex h-2 w-2">
               <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
@@ -833,16 +833,16 @@ export default function CalendarTab() {
                             </div>
                           ))}
                         </div>
-                        {evt.googleMeetUrl && (
+                        {evt.microsoftTeamsUrl && (
                           <a
-                            href={evt.googleMeetUrl}
+                            href={evt.microsoftTeamsUrl}
                             target="_blank"
                             rel="noreferrer"
                             onClick={(e) => e.stopPropagation()}
                             className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
                           >
                             <span className="material-symbols-outlined text-sm">video_call</span>
-                            Join Google Meet
+                            Join Teams Session
                           </a>
                         )}
                       </div>
@@ -921,16 +921,16 @@ export default function CalendarTab() {
                         ))}
                       </div>
 
-                      {item.googleMeetUrl && (
+                      {item.microsoftTeamsUrl && (
                         <a
-                          href={item.googleMeetUrl}
+                          href={item.microsoftTeamsUrl}
                           target="_blank"
                           rel="noreferrer"
                           onClick={(e) => e.stopPropagation()}
                           className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
                         >
                           <span className="material-symbols-outlined text-xs">video_call</span>
-                          <span>Join Meet</span>
+                          <span>Open Teams</span>
                         </a>
                       )}
                     </div>
@@ -1020,15 +1020,15 @@ export default function CalendarTab() {
 
               <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  {selectedEvent.googleMeetUrl && (
+                  {selectedEvent.microsoftTeamsUrl && (
                     <a
-                      href={selectedEvent.googleMeetUrl}
+                      href={selectedEvent.microsoftTeamsUrl}
                       target="_blank"
                       rel="noreferrer"
                       className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-1.5 shadow-xs hover:bg-[#3d24c8] transition-colors"
                     >
                       <span className="material-symbols-outlined text-sm">video_call</span>
-                      <span>Launch Google Meet</span>
+                      <span>Launch Teams Session</span>
                     </a>
                   )}
                   <button

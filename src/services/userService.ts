@@ -22,6 +22,8 @@ export interface UserProfileResponse {
   role_name?: string;
 }
 
+export type UserData = UserProfileResponse;
+
 export interface UserListResponse<T> {
   items: T[];
   total: number;

@@ -1,19 +1,90 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion } from "framer-motion";
-import { createBackendUser } from "@/services/adminService";
+import React, { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  createBackendUser,
+  DirectoryPerson,
+  DirectoryRole,
+} from "@/services/adminService";
+import { ApiError } from "@/services/apiClient";
+import { PageIntro, Pill, PrimaryButton, SectionCard } from "../SuperAdminUi";
 import { SuperAdminTab } from "../types";
 
 interface AddPersonTabProps {
   onNavigateTab: (tab: SuperAdminTab) => void;
-  onRefreshUsers?: () => void;
+  /** Called after a successful create so the People page can re-read the directory. */
+  onPersonCreated?: (person: DirectoryPerson) => void;
 }
 
-type RoleType = "HR Manager" | "Manager" | "Teacher" | "Learner";
+/**
+ * The four account types a superuser can provision, and which fields each one
+ * actually stores.
+ *
+ * "Intern" maps to `public.students`: the PMS has no separate intern table, so
+ * an intern is a learner record with an enrollment number. The label is the UI's
+ * choice; the record is a student.
+ */
+const ROLE_OPTIONS: Array<{
+  role: DirectoryRole;
+  label: string;
+  description: string;
+  icon: string;
+  endpoint: string;
+  needsSpecialization: boolean;
+  needsEnrollment: boolean;
+  tone: "violet" | "amber" | "teal" | "indigo";
+}> = [
+  {
+    role: "HR Manager",
+    label: "HR",
+    description: "People operations. Can also manage the role directories.",
+    icon: "manage_accounts",
+    endpoint: "POST /api/v1/hr",
+    needsSpecialization: true,
+    needsEnrollment: false,
+    tone: "violet",
+  },
+  {
+    role: "Manager",
+    label: "Manager",
+    description: "Owns a team, its workflows and the tasks inside them.",
+    icon: "badge",
+    endpoint: "POST /api/v1/managers",
+    needsSpecialization: false,
+    needsEnrollment: false,
+    tone: "amber",
+  },
+  {
+    role: "Teacher",
+    label: "Teacher",
+    description: "Delivers training and scores workflow and general evaluations.",
+    icon: "history_edu",
+    endpoint: "POST /api/v1/teachers",
+    needsSpecialization: true,
+    needsEnrollment: false,
+    tone: "teal",
+  },
+  {
+    role: "Intern",
+    label: "Intern",
+    description: "Learner record. Optionally linked to a batch by the team module.",
+    icon: "school",
+    endpoint: "POST /api/v1/students",
+    needsSpecialization: false,
+    needsEnrollment: true,
+    tone: "indigo",
+  },
+];
 
-export default function AddPersonTab({ onNavigateTab, onRefreshUsers }: AddPersonTabProps) {
-  const [selectedRole, setSelectedRole] = useState<RoleType>("Learner");
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
+interface CreatedRecord {
+  person: DirectoryPerson;
+}
+
+export default function AddPersonTab({ onNavigateTab, onPersonCreated }: AddPersonTabProps) {
+  const [selectedRole, setSelectedRole] = useState<DirectoryRole>("Intern");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [department, setDepartment] = useState("");
@@ -21,331 +92,361 @@ export default function AddPersonTab({ onNavigateTab, onRefreshUsers }: AddPerso
   const [enrollmentNo, setEnrollmentNo] = useState("");
 
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successData, setSuccessData] = useState<{ name: string; role: string; email: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [created, setCreated] = useState<CreatedRecord | null>(null);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!name.trim() || !email.trim()) {
-      setErrorMsg("Name and Email are required fields.");
-      return;
+  const activeRole = useMemo(
+    () => ROLE_OPTIONS.find((option) => option.role === selectedRole) ?? ROLE_OPTIONS[3],
+    [selectedRole]
+  );
+
+  const resetForm = () => {
+    setName("");
+    setEmail("");
+    setDepartment("");
+    setSpecialization("");
+    setEnrollmentNo("");
+    setFieldErrors({});
+    setError(null);
+  };
+
+  const validate = (): boolean => {
+    const next: Record<string, string> = {};
+
+    if (!name.trim()) {
+      next.name = "Name is required.";
+    } else if (name.trim().length < 2) {
+      next.name = "Name must be at least 2 characters.";
     }
 
-    setIsSubmitting(true);
-    setErrorMsg(null);
+    if (!email.trim()) {
+      next.email = "Email is required — it is the login identifier.";
+    } else if (!EMAIL_PATTERN.test(email.trim())) {
+      next.email = "Enter a valid email address.";
+    } else if (email.trim().toLowerCase() !== email.trim()) {
+      next.email = "Email must be lowercase.";
+    }
 
+    if (activeRole.needsSpecialization && !specialization.trim()) {
+      next.specialization = `Specialization is required for the ${activeRole.label} role.`;
+    }
+
+    if (activeRole.needsEnrollment && !enrollmentNo.trim()) {
+      next.enrollmentNo = "Enrollment number is required for interns.";
+    }
+
+    setFieldErrors(next);
+    return Object.keys(next).length === 0;
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    setError(null);
+    setCreated(null);
+
+    if (!validate()) return;
+
+    setIsSubmitting(true);
     try {
-      await createBackendUser({
+      const person = await createBackendUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         role: selectedRole,
         department: department.trim() || undefined,
-        specialization: (selectedRole === "HR Manager" || selectedRole === "Teacher") ? (specialization.trim() || undefined) : undefined,
-        enrollment_no: selectedRole === "Learner" ? (enrollmentNo.trim() || undefined) : undefined,
+        specialization: activeRole.needsSpecialization ? specialization.trim() || undefined : undefined,
+        enrollment_no: activeRole.needsEnrollment ? enrollmentNo.trim() || undefined : undefined,
       });
 
-      setSuccessData({
-        name: name.trim(),
-        role: selectedRole === "Learner" ? "Learner (Student/Intern)" : selectedRole,
-        email: email.trim().toLowerCase(),
-      });
-      onRefreshUsers?.();
-
-      // Reset form fields
-      setName("");
-      setEmail("");
-      setDepartment("");
-      setSpecialization("");
-      setEnrollmentNo("");
-    } catch (err: unknown) {
-      setErrorMsg(err instanceof Error ? err.message : "Failed to create user record.");
+      setCreated({ person });
+      onPersonCreated?.(person);
+      resetForm();
+    } catch (caught) {
+      if (caught instanceof ApiError) {
+        setError(caught.message);
+      } else if (caught instanceof Error) {
+        setError(caught.message);
+      } else {
+        setError("The account could not be provisioned.");
+      }
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  const handleResetForm = () => {
-    setSuccessData(null);
-    setErrorMsg(null);
-  };
+  const fieldClass = (key: string) =>
+    `w-full h-11 px-3.5 rounded-xl bg-slate-50 border text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 transition-colors ${
+      fieldErrors[key]
+        ? "border-rose-300 focus:border-rose-400 focus:ring-rose-200"
+        : "border-slate-200 focus:border-primary"
+    }`;
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 10 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.25, ease: "easeOut" }}
-      className="max-w-4xl mx-auto space-y-6"
+      className="space-y-6"
     >
-      {/* HEADER CARD */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-2">
-        <div className="flex items-center gap-3">
-          <span className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center">
-            <span className="material-symbols-outlined text-2xl">person_add</span>
-          </span>
-          <div>
-            <h2 className="text-lg font-bold text-slate-900">Add Platform User</h2>
-            <p className="text-xs text-slate-500">
-              Provision HR, Manager, Teacher, or Learner/Intern accounts with backend API integration
-            </p>
-          </div>
-        </div>
-      </div>
+      <PageIntro
+        icon="person_add"
+        title="Add Person"
+        description="Provision a new HR officer, manager, teacher or intern account"
+        action={
+          <button
+            type="button"
+            onClick={() => onNavigateTab("users")}
+            className="h-10 px-4 rounded-xl border border-slate-200/80 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+          >
+            <span className="material-symbols-outlined text-base text-slate-500">group</span>
+            <span>View all people</span>
+          </button>
+        }
+      />
 
-      {successData ? (
-        <motion.div
-          initial={{ opacity: 0, scale: 0.96 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-white p-8 rounded-2xl border border-emerald-200 shadow-xs text-center space-y-6"
+      <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+        {/* ROLE PICKER */}
+        <SectionCard
+          title="Account Type"
+          subtitle="Pick the role to provision"
+          icon="account_tree"
+          className="lg:col-span-2 self-start"
         >
-          <div className="w-16 h-16 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto">
-            <span className="material-symbols-outlined text-3xl">check_circle</span>
-          </div>
           <div className="space-y-2">
-            <h3 className="text-xl font-bold text-slate-900">User Successfully Provisioned</h3>
-            <p className="text-xs text-slate-600 max-w-md mx-auto">
-              Created account for <strong className="text-slate-900">{successData.name}</strong> ({successData.email}) as <strong className="text-primary">{successData.role}</strong>.
-            </p>
+            {ROLE_OPTIONS.map((option) => {
+              const isActive = option.role === selectedRole;
+              return (
+                <motion.button
+                  key={option.role}
+                  type="button"
+                  onClick={() => {
+                    setSelectedRole(option.role);
+                    setFieldErrors({});
+                    setError(null);
+                  }}
+                  whileHover={{ y: -2 }}
+                  transition={{ type: "spring", stiffness: 350, damping: 25 }}
+                  className={`w-full text-left p-3.5 rounded-xl border transition-all cursor-pointer ${
+                    isActive
+                      ? "border-[#4B2EF5] bg-primary/5 ring-2 ring-[#4B2EF5]/15"
+                      : "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50"
+                  }`}
+                >
+                  <div className="flex items-start gap-3">
+                    <span
+                      className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${
+                        isActive ? "bg-[#4B2EF5] text-white" : "bg-slate-100 text-slate-500"
+                      }`}
+                    >
+                      <span className="material-symbols-outlined text-lg">{option.icon}</span>
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-bold text-slate-900">{option.label}</span>
+                        <Pill tone={option.tone}>{option.role}</Pill>
+                      </div>
+                      <p className="text-[11px] text-slate-500 mt-1 leading-relaxed">
+                        {option.description}
+                      </p>
+                      <p className="text-[10px] font-mono text-slate-400 mt-1.5">{option.endpoint}</p>
+                    </div>
+                  </div>
+                </motion.button>
+              );
+            })}
           </div>
+        </SectionCard>
 
-          <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
-            <button
-              type="button"
-              onClick={() => onNavigateTab("users")}
-              className="px-5 py-2.5 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white text-xs font-bold transition-all shadow-xs cursor-pointer flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-base">group</span>
-              <span>View in People Directory</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResetForm}
-              className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer flex items-center gap-2"
-            >
-              <span className="material-symbols-outlined text-base">person_add</span>
-              <span>Add Another Person</span>
-            </button>
-          </div>
-        </motion.div>
-      ) : (
-        <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-6">
-          {/* ROLE SELECTOR CARDS */}
-          <div className="space-y-2">
-            <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-              1. Select Account Type / Role
-            </label>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-              {/* Learner */}
-              <button
-                type="button"
-                onClick={() => setSelectedRole("Learner")}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  selectedRole === "Learner"
-                    ? "border-[#4B2EF5] bg-purple-50/50 ring-2 ring-[#4B2EF5]/20 shadow-xs"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="material-symbols-outlined text-indigo-600 text-xl">school</span>
-                  {selectedRole === "Learner" && (
-                    <span className="w-2 h-2 rounded-full bg-[#4B2EF5]" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-bold text-xs text-slate-900">Learner / Intern</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Student database record</div>
-                </div>
-              </button>
-
-              {/* Teacher */}
-              <button
-                type="button"
-                onClick={() => setSelectedRole("Teacher")}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  selectedRole === "Teacher"
-                    ? "border-[#4B2EF5] bg-purple-50/50 ring-2 ring-[#4B2EF5]/20 shadow-xs"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="material-symbols-outlined text-teal-600 text-xl">history_edu</span>
-                  {selectedRole === "Teacher" && (
-                    <span className="w-2 h-2 rounded-full bg-[#4B2EF5]" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-bold text-xs text-slate-900">Teacher / Faculty</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Evaluator authority profile</div>
-                </div>
-              </button>
-
-              {/* Manager */}
-              <button
-                type="button"
-                onClick={() => setSelectedRole("Manager")}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  selectedRole === "Manager"
-                    ? "border-[#4B2EF5] bg-purple-50/50 ring-2 ring-[#4B2EF5]/20 shadow-xs"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="material-symbols-outlined text-amber-600 text-xl">badge</span>
-                  {selectedRole === "Manager" && (
-                    <span className="w-2 h-2 rounded-full bg-[#4B2EF5]" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-bold text-xs text-slate-900">Department Manager</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Operations management profile</div>
-                </div>
-              </button>
-
-              {/* HR Manager */}
-              <button
-                type="button"
-                onClick={() => setSelectedRole("HR Manager")}
-                className={`p-4 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
-                  selectedRole === "HR Manager"
-                    ? "border-[#4B2EF5] bg-purple-50/50 ring-2 ring-[#4B2EF5]/20 shadow-xs"
-                    : "border-slate-200 hover:border-slate-300 bg-white"
-                }`}
-              >
-                <div className="flex items-center justify-between mb-2">
-                  <span className="material-symbols-outlined text-violet-600 text-xl">manage_accounts</span>
-                  {selectedRole === "HR Manager" && (
-                    <span className="w-2 h-2 rounded-full bg-[#4B2EF5]" />
-                  )}
-                </div>
-                <div>
-                  <div className="font-bold text-xs text-slate-900">HR Manager</div>
-                  <div className="text-[11px] text-slate-500 mt-0.5">Human resources profile</div>
-                </div>
-              </button>
-            </div>
-          </div>
-
-          {/* DYNAMIC FORM */}
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-1">
-              <label className="block text-xs font-bold text-slate-700 uppercase tracking-wider">
-                2. Enter Person Details
-              </label>
-              {selectedRole === "Learner" && (
-                <p className="text-[11px] text-slate-500 italic">
-                  Note: Learners and Interns map directly to the existing student account model (`students` table).
-                </p>
-              )}
-            </div>
-
+        {/* FORM */}
+        <SectionCard
+          title={`New ${activeRole.label} account`}
+          subtitle="Creates the user identity and its role profile"
+          icon="person_add"
+          className="lg:col-span-3"
+        >
+          <form onSubmit={handleSubmit} className="space-y-4" noValidate>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
+                <label htmlFor="ap-name" className="block text-[11px] font-bold text-slate-700 mb-1.5">
                   Full Name <span className="text-rose-500">*</span>
                 </label>
                 <input
+                  id="ap-name"
                   type="text"
-                  required
-                  placeholder="e.g. Kenji Tanaka"
                   value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  onChange={(event) => setName(event.target.value)}
+                  placeholder="e.g. Priya Raghunathan"
+                  className={fieldClass("name")}
+                  autoComplete="off"
                 />
+                {fieldErrors.name && (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.name}</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Email Address <span className="text-rose-500">*</span>
+                <label htmlFor="ap-email" className="block text-[11px] font-bold text-slate-700 mb-1.5">
+                  Email <span className="text-rose-500">*</span>
                 </label>
                 <input
+                  id="ap-email"
                   type="email"
-                  required
-                  placeholder="e.g. kenji.tanaka@example.com"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  onChange={(event) => setEmail(event.target.value)}
+                  placeholder="name@company.com"
+                  className={fieldClass("email")}
+                  autoComplete="off"
                 />
+                {fieldErrors.email ? (
+                  <p className="text-[11px] text-rose-600 mt-1 font-medium">{fieldErrors.email}</p>
+                ) : (
+                  <p className="text-[11px] text-slate-400 mt-1">Used as the login identifier.</p>
+                )}
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Department / Unit
+                <label
+                  htmlFor="ap-department"
+                  className="block text-[11px] font-bold text-slate-700 mb-1.5"
+                >
+                  Department
                 </label>
                 <input
+                  id="ap-department"
                   type="text"
-                  placeholder="e.g. Engineering, Human Resources, Academic Cohort"
                   value={department}
-                  onChange={(e) => setDepartment(e.target.value)}
-                  className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                  onChange={(event) => setDepartment(event.target.value)}
+                  placeholder="e.g. Engineering"
+                  className={fieldClass("department")}
+                  autoComplete="off"
                 />
               </div>
 
-              {(selectedRole === "HR Manager" || selectedRole === "Teacher") && (
+              {activeRole.needsSpecialization && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Specialization / Track
+                  <label
+                    htmlFor="ap-specialization"
+                    className="block text-[11px] font-bold text-slate-700 mb-1.5"
+                  >
+                    Specialization <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="ap-specialization"
                     type="text"
-                    placeholder="e.g. Talent Acquisition, Japanese Keigo Mentor"
                     value={specialization}
-                    onChange={(e) => setSpecialization(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    onChange={(event) => setSpecialization(event.target.value)}
+                    placeholder={
+                      selectedRole === "Teacher" ? "e.g. IELTS Preparation" : "e.g. Talent Operations"
+                    }
+                    className={fieldClass("specialization")}
+                    autoComplete="off"
                   />
+                  {fieldErrors.specialization && (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                      {fieldErrors.specialization}
+                    </p>
+                  )}
                 </div>
               )}
 
-              {selectedRole === "Learner" && (
+              {activeRole.needsEnrollment && (
                 <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Enrollment No / Intern ID
+                  <label
+                    htmlFor="ap-enrollment"
+                    className="block text-[11px] font-bold text-slate-700 mb-1.5"
+                  >
+                    Enrollment Number <span className="text-rose-500">*</span>
                   </label>
                   <input
+                    id="ap-enrollment"
                     type="text"
-                    placeholder="e.g. ENR-2026-8801"
                     value={enrollmentNo}
-                    onChange={(e) => setEnrollmentNo(e.target.value)}
-                    className="w-full h-10 px-3.5 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-800 focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+                    onChange={(event) => setEnrollmentNo(event.target.value)}
+                    placeholder="e.g. INT-2026-014"
+                    className={fieldClass("enrollmentNo")}
+                    autoComplete="off"
                   />
+                  {fieldErrors.enrollmentNo ? (
+                    <p className="text-[11px] text-rose-600 mt-1 font-medium">
+                      {fieldErrors.enrollmentNo}
+                    </p>
+                  ) : (
+                    <p className="text-[11px] text-slate-400 mt-1">Must be unique across interns.</p>
+                  )}
                 </div>
               )}
             </div>
 
-            {errorMsg && (
-              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
-                <span className="material-symbols-outlined text-base">error</span>
-                <span>{errorMsg}</span>
+            {error && (
+              <div className="flex items-start gap-2.5 p-3 px-4 rounded-xl bg-rose-50 border border-rose-200 text-xs">
+                <span className="material-symbols-outlined text-base text-rose-600 shrink-0">error</span>
+                <p className="text-rose-800">{error}</p>
               </div>
             )}
 
-            <div className="pt-4 border-t border-slate-100 flex justify-end gap-3">
-              <button
-                type="button"
-                onClick={() => onNavigateTab("users")}
-                className="px-4 py-2.5 rounded-xl text-slate-600 hover:bg-slate-100 text-xs font-semibold cursor-pointer transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white text-xs font-bold shadow-xs cursor-pointer active:scale-95 transition-all disabled:opacity-50 flex items-center gap-2"
-              >
-                {isSubmitting ? (
-                  <>
-                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                    <span>Provisioning Account...</span>
-                  </>
-                ) : (
-                  <>
-                    <span className="material-symbols-outlined text-base">person_add</span>
-                    <span>Provision User</span>
-                  </>
-                )}
-              </button>
+            <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-slate-100">
+              <PrimaryButton type="submit" icon={isSubmitting ? undefined : "how_to_reg"} disabled={isSubmitting}>
+                {isSubmitting ? "Provisioning…" : `Create ${activeRole.label} account`}
+              </PrimaryButton>
+              <PrimaryButton tone="slate" onClick={resetForm} icon="clear">
+                Clear
+              </PrimaryButton>
+              <p className="text-[11px] text-slate-400 ml-auto">
+                The account is created active and can sign in immediately.
+              </p>
             </div>
           </form>
-        </div>
-      )}
+
+          <AnimatePresence>
+            {created && (
+              <motion.div
+                key={created.person.profileId}
+                initial={{ opacity: 0, y: 8, height: 0 }}
+                animate={{ opacity: 1, y: 0, height: "auto" }}
+                exit={{ opacity: 0, y: -8, height: 0 }}
+                transition={{ duration: 0.24, ease: "easeOut" }}
+                className="overflow-hidden"
+              >
+                <div className="mt-4 p-4 rounded-xl bg-emerald-50 border border-emerald-200">
+                  <div className="flex items-start gap-3">
+                    <span className="material-symbols-outlined text-xl text-emerald-600 shrink-0">
+                      check_circle
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-emerald-900">
+                        {created.person.name} was provisioned as {created.person.role}
+                      </p>
+                      <p className="text-[11px] font-mono text-emerald-700 mt-0.5 truncate">
+                        {created.person.email}
+                      </p>
+                      <p className="text-[11px] text-emerald-700/80 mt-1">
+                        Profile ID <span className="font-mono">{created.person.profileId}</span>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 mt-3">
+                    <PrimaryButton
+                      onClick={() => onNavigateTab("users")}
+                      icon="group"
+                      className="text-[11px]"
+                    >
+                      View in People
+                    </PrimaryButton>
+                    <PrimaryButton
+                      tone="slate"
+                      onClick={() => setCreated(null)}
+                      icon="close"
+                      className="text-[11px]"
+                    >
+                      Dismiss
+                    </PrimaryButton>
+                  </div>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </SectionCard>
+      </div>
     </motion.div>
   );
 }

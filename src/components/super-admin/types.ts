@@ -1,3 +1,10 @@
+/**
+ * Superuser dashboard types.
+ *
+ * The dashboard is a fixed set of seven pages. `SuperAdminTab` is the single
+ * source of truth for that set — the nav, the URL `?tab=` parameter and the
+ * page shell all key off it.
+ */
 export type SuperAdminTab =
   | "overview"
   | "teams"
@@ -5,84 +12,70 @@ export type SuperAdminTab =
   | "progress"
   | "calendar"
   | "add-person"
-  | "profile"
-  | "organisations"
-  | "roles"
-  | "audit"
-  | "settings"
-  | "portals"
-  | "reports"
-  | "notifications";
+  | "profile";
 
-export interface SimulationState {
-  isActive: boolean;
-  role: string;
-  user: string;
-  organisation: string;
-  auditHash: string;
+/** Display metadata for one nav tab, in render order. */
+export interface SuperAdminTabMeta {
+  key: SuperAdminTab;
+  label: string;
+  icon: string;
+  description: string;
 }
 
-export interface OrganisationRecord {
-  id: string;
-  code: string;
-  name: string;
-  domain: string;
-  region: string;
-  plan: "Enterprise" | "Academic" | "Standard";
-  status: "Active" | "Trial" | "Suspended";
-  totalUsers: number;
-  maxUsers: number;
-  storageGB: number;
-  maxStorageGB: number;
-  adminName: string;
-  adminEmail: string;
-  mfaEnforced: boolean;
-  createdAt: string;
+export const SUPER_ADMIN_TABS: SuperAdminTabMeta[] = [
+  {
+    key: "overview",
+    label: "Overview",
+    icon: "dashboard",
+    description: "System-wide identity, workload and evaluation counters",
+  },
+  {
+    key: "teams",
+    label: "Teams",
+    icon: "groups",
+    description: "Every batch with its leads, headcount and task progress",
+  },
+  {
+    key: "users",
+    label: "People",
+    icon: "group",
+    description: "Search and manage HR, managers, teachers and interns",
+  },
+  {
+    key: "progress",
+    label: "Progress",
+    icon: "monitoring",
+    description: "Completion and evaluation scores, team by team",
+  },
+  {
+    key: "calendar",
+    label: "Microsoft Calendar",
+    icon: "calendar_month",
+    description: "The superuser's Microsoft 365 schedule",
+  },
+  {
+    key: "add-person",
+    label: "Add Person",
+    icon: "person_add",
+    description: "Provision an HR, manager, teacher or intern account",
+  },
+  {
+    key: "profile",
+    label: "Profile",
+    icon: "account_circle",
+    description: "Your identity, role and data scope",
+  },
+];
+
+const VALID_TABS = new Set<string>(SUPER_ADMIN_TABS.map((tab) => tab.key));
+
+/** Narrow an arbitrary `?tab=` value to a known tab, defaulting to Overview. */
+export function isSuperAdminTab(value: string | null | undefined): value is SuperAdminTab {
+  return !!value && VALID_TABS.has(value);
 }
 
-export interface UserDirectoryRecord {
-  id: string;
-  name: string;
-  email: string;
-  role: "Learner" | "Teacher" | "HR Manager" | "Manager" | "Superuser";
-  organisation: string;
-  orgCode: string;
-  batchOrDept: string;
-  specialization?: string;
-  status: "Active" | "Pending" | "Suspended";
-  mfaEnabled: boolean;
-  lastActive: string;
-  avatarUrl?: string;
-  initials: string;
-}
-
-export interface AuditLogRecord {
-  id: string;
-  hash: string;
-  timestamp: string;
-  relativeTime: string;
-  orgName: string;
-  orgCode: string;
-  actorName: string;
-  actorRole: string;
-  impersonatedBy?: string;
-  actionTitle: string;
-  actionDetails: string;
-  ipAddress: string;
-  location: string;
-  severity: "info" | "warning" | "critical";
-  payloadJson?: Record<string, unknown>;
-}
-
-export interface ProgressIncident {
-  id: string;
-  targetName: string;
-  targetRole: "Learner" | "Teacher" | "HR";
-  orgName: string;
-  severity: "high" | "medium" | "low";
-  issueTitle: string;
-  issueDescription: string;
-  metricLabel: string;
-  metricValue: string;
-  recommendedAction: string;
+/** Shared loading / error / empty state used by every data-driven page. */
+export interface AsyncState {
+  isLoading: boolean;
+  error: string | null;
 }

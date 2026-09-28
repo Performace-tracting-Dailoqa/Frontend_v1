@@ -1,64 +1,85 @@
-# Superuser Dashboard Integration Implementation Plan
+# Superuser Dashboard Integration — Implementation Record
 
 ## Findings from the current project
 
 - The superuser dashboard lives at `Frontend_v1/app/dashboard/super-admin/page.tsx` and uses tab-based navigation with components under `Frontend_v1/src/components/super-admin/`.
-- The current visual style is consistent across those components: white cards, slate borders and text, rounded corners, subtle shadows, motion transitions, and the purple `#4B2EF5` accent. Keep these patterns and update only the superuser dashboard.
+- The current visual style is consistent across those components: white cards, slate borders and text, rounded corners, subtle shadows, motion transitions, and the purple `#4B2EF5` accent. **Kept unchanged** — no new theme was introduced.
 - The database has `users` and role-specific `managers`, `teachers`, and `hrs` tables. Learners/interns are represented by `students`, which links to a `batch`; there is no separate `interns` table.
-- HR, manager, and teacher CRUD APIs exist. Existing frontend services already call these, along with student APIs.
-- The current dashboard and several tabs still contain mock data. Also, the current people aggregation fills in placeholder organization/security/activity details that the listed CRUD APIs do not provide.
-- The API reference documents a known issue: `GET /hr` may return null `name` and `email`, so HR directory records need a reliable identity source.
-- Microsoft authentication endpoints exist, but no calendar integration endpoints were found. There are also no dedicated superuser teams or overall-progress endpoints in the inspected backend routes.
+- The app never stores Microsoft refresh tokens, so a user-delegated Graph calendar is not possible. The calendar is read with the **client-credentials (app-only)** flow against one configured mailbox.
+- Supabase REST has no `GROUP BY`, so the insights endpoints fetch bounded projections (`ROW_CAPPED = 5000`) and aggregate in Python. Overview, Teams and Progress all derive from **one** `build_team_rollup()`, so the same team shows identical numbers on every page by construction.
 
-## Implementation plan
+## What shipped
 
-### 1. Define the superuser scope and navigation
+### Backend — 6 new endpoints
 
-- Update only the superuser dashboard navigation to expose the requested pages: **Overview, Teams, People, Progress, Microsoft Calendar, Add Person, and Profile**.
-- Map the current “Teams & Gantt” tab to Teams, and revise outdated labels such as “Google Calendar.”
-- Retain the existing tab layout, header, card styling, responsive behavior, motion, and purple accent.
-- Remove or hide unrelated superuser tabs from this dashboard so they do not distract from the requested workflow.
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v1/superuser/overview` | Overview KPIs + audit preview + role counts |
+| `GET /api/v1/superuser/teams` | Paginated, searchable team list with roll-ups |
+| `GET /api/v1/superuser/progress` | Ranked per-team progress (not paginated) |
+| `GET /api/v1/microsoft/calendar/status` | Config/connectivity probe, never 500s |
+| `GET /api/v1/microsoft/calendar/events` | `calendarView` events; 424 for config gaps |
+| `PUT /api/v1/auth/me` | Self-service **name** only |
 
-### 2. Map the database to dashboard concepts
+New files: `insights_repository.py`, `insights_service.py`, `schemas/insights.py`,
+`routes/superuser/insights.py`, `core/microsoft_graph.py`, `routes/microsoft/calendar.py`.
 
-- Use `users` and role-specific profile tables for people.
-- Treat `students` as the existing learner/intern account model; confirm the product’s preferred display label before presenting these accounts as “Interns.”
-- Use `batches` and their manager/teacher assignments as the current basis for Teams, unless “team” is meant to represent a different concept.
-- Build progress views only from available workflow tasks and evaluation data; distinguish real metrics from anything not currently returned by an API.
+Modified: `core/config.py` (4 Graph settings), `api/router.py`, `routes/auth/routes.py`,
+`services/auth_service.py`, `schemas/users.py`, `dependencies/auth.py`.
 
-### 3. Implement the pages using current UI patterns
+### Frontend — 7 pages
 
-- **Overview:** Show live, backend-supported counts and summaries, with links into Teams, People, and Progress. Remove hard-coded KPIs and activity entries where no backend source exists.
-- **Teams:** Present batches as teams with department, dates, status, manager, teacher, and learner count where APIs can supply them.
-- **People:** Provide cross-role search and filters for HR, manager, teacher, and learner/intern, with profile details and status actions backed by the appropriate APIs.
-- **Progress:** Display team-level workflow/evaluation progress, filters, and clear empty/loading/error states.
-- **Microsoft Calendar:** Adapt the existing calendar UI and branding, but bind it to the signed-in superuser’s Microsoft calendar only after the backend exposes calendar-event integration.
-- **Add Person:** Provide role-specific forms. HR, manager, teacher, and student creation should call their corresponding APIs and fields; do not imply that a separate intern record is being created.
-- **Profile:** Show and edit the signed-in user’s actual profile only for fields supported by existing profile/auth APIs; avoid mock sessions, credentials, and keys.
+`SUPER_ADMIN_TABS` in `types.ts` is the single source of truth for the nav, the `?tab=`
+URL parameter and the page shell, so they cannot disagree about what pages exist.
 
-### 4. Connect frontend data to backend APIs
+| Page | Backing call |
+| --- | --- |
+| Overview | `GET /superuser/overview` + `fetchSystemTelemetry` |
+| Teams | `GET /superuser/teams` |
+| People | `fetchDirectory` → HR/manager/teacher/student list endpoints |
+| Progress | `GET /superuser/progress` |
+| Microsoft Calendar | `GET /microsoft/calendar/{status,events}` |
+| Add Person | `POST /{hr,managers,teachers,students}` |
+| Profile | `GET`/`PUT /auth/me` |
 
-- Consolidate superuser fetch/create/update/deactivate calls in the existing service layer rather than making API calls inside presentation components.
-- Reuse existing HR, manager, teacher, and student CRUD endpoints. Preserve pagination and loading/error states.
-- Reconcile profile IDs versus user IDs before wiring update/deactivation: the current frontend appears to pass profile IDs to APIs, while some actions conceptually target the linked `users` record.
-- Fix HR identity enrichment for People using a backend response that includes linked user name, email, and active status, or another reliable identity lookup.
-- Replace telemetry values and fallback mock counts with values actually returned by the backend; show unavailable states where there is no data.
+New: `apiClient.ts`, `insightsService.ts`, `calendarService.ts`, `useAsyncData.ts`,
+`SuperAdminUi.tsx` (shared card/state/stat primitives).
 
-### 5. Identify backend work needed for complete coverage
+### Removed — mock-only, no backend
 
-- Add or confirm APIs for batch/team listing and team-level membership/assignments.
-- Add overall progress aggregation endpoints if existing workflow/evaluation endpoints cannot support the required dashboard efficiently.
-- Add Microsoft Graph calendar event endpoints and ensure the superuser’s Microsoft identity and authorization scopes support reading that user’s calendar.
-- Add profile read/update APIs if the existing `/auth/me` endpoint does not provide the fields needed by the Profile page.
-- Confirm whether the HR list response limitation has already been corrected in the running backend.
+`mockData.ts`, `SuperuserSandboxBanner.tsx`, and the Organisations, Audit, Portals,
+Access Control, System Settings, Notifications and Teams Reports tabs. The
+`SuperuserSandboxBanner` "view as another user" simulation had no backend and
+referenced an organisations entity that does not exist; the header's org filter
+and "Create Organisation" button went with it.
 
-### 6. Verify the implementation
+## Deliberate design decisions
 
-- Check that the requested navigation and pages work at desktop and mobile widths and match existing superuser styling.
-- Verify list, create, update, and deactivate flows against the backend, including empty results, loading, API failures, and pagination.
-- Confirm calendar and progress states accurately reflect API availability rather than presenting mock data as live.
-- Run the frontend checks and relevant backend API tests after implementation.
+- **Insights are Super Admin only.** HR is excluded because these endpoints expose
+  system-wide data.
+- **Profile update accepts `name` only.** Email is the login identifier and may be
+  bound to a Microsoft object id, so changing it needs admin re-provisioning.
+- **"Intern" is a `students` row.** The PMS has no intern entity, so the UI labels
+  the bucket "Intern" while the record is a student with an enrollment number.
+- **Unreachable calendar returns a state, not an error.** The UI shows a setup panel
+  with the exact missing configuration instead of an empty calendar.
+- **Every failure is a state.** Pages render explicit loading / empty / error /
+  permission-denied / not-configured states rather than a blank table.
 
-## Dependency note
+## Verification
 
-The existing staff CRUD endpoints can support much of People and Add Person. Teams, overall Progress, and Microsoft Calendar require backend endpoint confirmation or additions before those pages can be fully live.
+- `npx tsc --noEmit --incremental false` → clean for all superuser code.
+- `npx next build` → passes; `/dashboard/super-admin` prerenders.
+- `pytest` → **198 passed, 7 failed**. All 7 failures are pre-existing and live in
+  files this work never touched (`test_manager_workflows.py` missing asyncio marker,
+  `test_microsoft_auth.py` mock `StopIteration`, `test_superuser_students.py`
+  query-shape mismatch).
+- New tests: `test_insights_service.py` (56), `test_microsoft_calendar.py` (24),
+  `test_auth_profile_update.py` (17) — 97 tests over the new code.
+
+### Known pre-existing blocker (out of scope)
+
+`app/dashboard/manager/page.tsx` is missing its React imports and fails to compile,
+which blocks `next build` for the whole app. It is a different dashboard and was
+left untouched per the "modify only the superuser dashboard" constraint. Adding the
+missing `useState`/`useEffect`/`useCallback` imports would unblock the build.

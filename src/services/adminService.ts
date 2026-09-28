@@ -468,3 +468,91 @@ export function applyProfileNameToSession(name: string): void {
   if (!session) return;
   saveProfileSession({ ...session.user, name });
 }
+
+// ---------------------------------------------------------------------------
+// Student Individual Performance Report
+// ---------------------------------------------------------------------------
+
+export interface StudentTaskItem {
+  id: string;
+  workflow_id?: string | null;
+  workflow_title?: string | null;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority?: string | null;
+  due_date?: string | null;
+  submitted_at?: string | null;
+  completed_at?: string | null;
+  created_at?: string | null;
+}
+
+export interface StudentEvaluationMetric {
+  id?: string | null;
+  name: string;
+  description?: string | null;
+  full_score?: number | null;
+  weightage?: number | null;
+  score?: number | null;
+  weighted_score?: number | null;
+  remarks?: string | null;
+}
+
+export interface StudentEvaluationItem {
+  id: string;
+  evaluation_type: "workflow" | "general" | string;
+  workflow_task_id?: string | null;
+  task_title?: string | null;
+  evaluator_name?: string | null;
+  evaluation_date?: string | null;
+  total_score?: number | null;
+  max_score?: number | null;
+  percentage?: number | null;
+  status?: string | null;
+  remarks?: string | null;
+  evaluated_at?: string | null;
+  metrics: StudentEvaluationMetric[];
+}
+
+export interface StudentReportSummary {
+  total_tasks: number;
+  completed_tasks: number;
+  in_progress_tasks: number;
+  pending_tasks: number;
+  overdue_tasks: number;
+  completion_rate: number;
+  average_score: number;
+  total_evaluations: number;
+}
+
+export interface StudentReportData {
+  student: {
+    id: string;
+    user_id: string;
+    name?: string | null;
+    email?: string | null;
+    enrollment_no?: string | null;
+    department?: string | null;
+    joining_date?: string | null;
+    status?: string | null;
+    batch_id?: string | null;
+    is_active: boolean;
+  };
+  batch_name?: string | null;
+  summary: StudentReportSummary;
+  tasks: StudentTaskItem[];
+  evaluations: StudentEvaluationItem[];
+}
+
+/**
+ * Fetch the comprehensive individual report for a student/intern:
+ * tasks assigned, daily and workflow evaluations, metrics breakdown, and KPIs.
+ */
+export async function fetchStudentReport(studentProfileId: string): Promise<StudentReportData> {
+  return apiJson<StudentReportData>(
+    `/api/v1/students/${studentProfileId}/report`,
+    { method: "GET" },
+    "Failed to load student report"
+  );
+}
+

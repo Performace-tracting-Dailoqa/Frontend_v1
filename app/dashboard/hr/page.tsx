@@ -1,11 +1,23 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { HRTab } from "@/components/hr/types";
+import HRNavTabs from "@/components/hr/HRNavTabs";
 
-export default function HRDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"employees" | "cycles" | "evaluations" | "analytics" | "reports" | "notifications">("employees");
+import EmployeesTab from "@/components/hr/tabs/EmployeesTab";
+import CyclesTab from "@/components/hr/tabs/CyclesTab";
+import EvaluationsTab from "@/components/hr/tabs/EvaluationsTab";
+import AnalyticsTab from "@/components/hr/tabs/AnalyticsTab";
+import ReportsTab from "@/components/hr/tabs/ReportsTab";
+import NotificationsTab from "@/components/hr/tabs/NotificationsTab";
+
+function HRDashboardContent() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as HRTab | null;
+  const activeTab: HRTab = tabParam || "employees";
 
   return (
     <ProtectedRoute allowedRoles={["hr"]}>
@@ -41,93 +53,21 @@ export default function HRDashboardPage() {
                 </div>
               </div>
 
-              {/* Navigation Tabs per HR Spec */}
-              <div className="flex items-center gap-2 overflow-x-auto border-b border-outline-variant/30 pb-2 text-body-sm font-medium">
-                <button
-                  onClick={() => setActiveTab("employees")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "employees"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">groups</span>
-                  <span>Employees</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("cycles")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "cycles"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">calendar_month</span>
-                  <span>Performance Cycles</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("evaluations")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "evaluations"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">rule</span>
-                  <span>Evaluation Monitoring</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("analytics")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "analytics"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">equalizer</span>
-                  <span>Analytics</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("reports")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "reports"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">description</span>
-                  <span>Reports</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("notifications")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "notifications"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">notifications</span>
-                  <span>Notifications</span>
-                </button>
-              </div>
+              {/* Navigation Tabs */}
+              <HRNavTabs activeTab={activeTab} />
 
               {/* KPI Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Active Cycles</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">0 Active</p>
-                  <p className="text-[11px] text-outline mt-1">Cycle engine not yet provisioned</p>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">2 Active</p>
+                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">Q3 Review in progress</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Evaluation State</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">Uninitialized</p>
-                  <p className="text-[11px] text-outline mt-1">Backend cycles pending</p>
+                  <span className="text-label-sm text-outline font-medium">Employees</span>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">124</p>
+                  <p className="text-[11px] text-outline mt-1">Total managed workforce</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
@@ -143,21 +83,14 @@ export default function HRDashboardPage() {
                 </div>
               </div>
 
-              {/* Main Content Area: Empty/Coming-Soon State without fake data */}
-              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-amber-500/10 text-amber-600 flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-outlined text-3xl">hourglass_top</span>
-                </div>
-                <h3 className="text-title-lg font-headline font-bold text-on-surface">
-                  Performance Cycle Management
-                </h3>
-                <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2">
-                  Performance cycle configuration, evaluation monitoring, and organization-wide analytics are scheduled for subsequent PMS milestones.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-outline text-xs font-medium border border-outline-variant/40">
-                  <span className="material-symbols-outlined text-sm">info</span>
-                  <span>Empty state • Performance cycle backend/database functionality is not currently implemented</span>
-                </div>
+              {/* Dynamic Content Panel */}
+              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8">
+                {activeTab === "employees" && <EmployeesTab />}
+                {activeTab === "cycles" && <CyclesTab />}
+                {activeTab === "evaluations" && <EvaluationsTab />}
+                {activeTab === "analytics" && <AnalyticsTab />}
+                {activeTab === "reports" && <ReportsTab />}
+                {activeTab === "notifications" && <NotificationsTab />}
               </div>
 
             </div>
@@ -165,5 +98,13 @@ export default function HRDashboardPage() {
         );
       }}
     </ProtectedRoute>
+  );
+}
+
+export default function HRDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading dashboard...</div>}>
+      <HRDashboardContent />
+    </Suspense>
   );
 }

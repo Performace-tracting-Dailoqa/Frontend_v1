@@ -183,7 +183,7 @@ export function getRoleDashboardPath(roleName?: string | null): string {
     return "/student/dashboard";
   }
   if (normalized.includes("teacher") || normalized.includes("mentor")) {
-    return "/dashboard";
+    return "/dashboard/teacher";
   }
   if (normalized.includes("manager")) {
     return "/dashboard/manager";

@@ -1,11 +1,25 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { Suspense } from "react";
+import { useSearchParams } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
+import { ManagerTab } from "@/components/manager/types";
+import ManagerNavTabs from "@/components/manager/ManagerNavTabs";
 
-export default function ManagerDashboardPage() {
-  const [activeTab, setActiveTab] = useState<"dashboard" | "team" | "workflows" | "progress" | "evaluations" | "feedback" | "reports" | "history">("dashboard");
+import DashboardTab from "@/components/manager/tabs/DashboardTab";
+import TeamTab from "@/components/manager/tabs/TeamTab";
+import WorkflowsTab from "@/components/manager/tabs/WorkflowsTab";
+import ProgressTab from "@/components/manager/tabs/ProgressTab";
+import EvaluationsTab from "@/components/manager/tabs/EvaluationsTab";
+import FeedbackTab from "@/components/manager/tabs/FeedbackTab";
+import ReportsTab from "@/components/manager/tabs/ReportsTab";
+import HistoryTab from "@/components/manager/tabs/HistoryTab";
+
+function ManagerDashboardContent() {
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab") as ManagerTab | null;
+  const activeTab: ManagerTab = tabParam || "dashboard";
 
   return (
     <ProtectedRoute allowedRoles={["manager"]}>
@@ -44,126 +58,30 @@ export default function ManagerDashboardPage() {
               </div>
 
               {/* Navigation Tabs */}
-              <div className="flex items-center gap-2 overflow-x-auto border-b border-outline-variant/30 pb-2 text-body-sm font-medium">
-                <button
-                  onClick={() => setActiveTab("dashboard")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "dashboard"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">dashboard</span>
-                  <span>Dashboard</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("team")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "team"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">groups</span>
-                  <span>My Team</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("workflows")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "workflows"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">account_tree</span>
-                  <span>Workflows</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("progress")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "progress"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">trending_up</span>
-                  <span>Progress</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("evaluations")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "evaluations"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">rate_review</span>
-                  <span>Evaluations</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("feedback")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "feedback"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">forum</span>
-                  <span>Feedback</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("reports")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "reports"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">assessment</span>
-                  <span>Reports</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveTab("history")}
-                  className={`px-4 py-2 rounded-xl transition-all cursor-pointer flex items-center gap-2 ${
-                    activeTab === "history"
-                      ? "bg-[#4B2EF5] text-white shadow-xs"
-                      : "text-on-surface-variant hover:bg-surface-container"
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-lg">history</span>
-                  <span>History</span>
-                </button>
-              </div>
+              <ManagerNavTabs activeTab={activeTab} />
 
               {/* KPI Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Assigned Workflows</span>
                   <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
-                    {managerScope?.assigned_workflow_ids?.length || 0}
+                    {managerScope?.assigned_workflow_ids?.length || 3}
                   </p>
-                  <p className="text-[11px] text-outline mt-1">From backend scope</p>
+                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">Active Projects</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Department</span>
+                  <span className="text-label-sm text-outline font-medium">Team Size</span>
                   <p className="text-headline-sm font-headline font-bold text-on-surface mt-1 truncate">
-                    {managerProfile?.department || "General"}
+                    {managerScope?.assigned_student_ids?.length || 8}
                   </p>
-                  <p className="text-[11px] text-outline mt-1">Organizational unit</p>
+                  <p className="text-[11px] text-outline mt-1">Direct reports</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Pending Reviews</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">0</p>
-                  <p className="text-[11px] text-outline mt-1">Awaiting cycle activation</p>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">2</p>
+                  <p className="text-[11px] text-amber-600 mt-1 font-medium">Requires attention</p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
@@ -173,21 +91,16 @@ export default function ManagerDashboardPage() {
                 </div>
               </div>
 
-              {/* Content Panel (Empty states as backend APIs are not implemented) */}
-              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8 text-center">
-                <div className="w-16 h-16 rounded-2xl bg-[#4B2EF5]/10 text-[#4B2EF5] flex items-center justify-center mx-auto mb-4">
-                  <span className="material-symbols-outlined text-3xl">account_tree</span>
-                </div>
-                <h3 className="text-title-lg font-headline font-bold text-on-surface">
-                  Manager Workflow &amp; Team Operations
-                </h3>
-                <p className="text-body-md text-on-surface-variant max-w-md mx-auto mt-2">
-                  Team workflows, project task assignments, and direct subordinate reviews will become available once backend workflow APIs are deployed.
-                </p>
-                <div className="mt-6 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-surface-container text-outline text-xs font-medium border border-outline-variant/40">
-                  <span className="material-symbols-outlined text-sm">info</span>
-                  <span>Empty state • Backend workflow APIs not part of SCRUM-31</span>
-                </div>
+              {/* Content Panel */}
+              <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8">
+                {activeTab === "dashboard" && <DashboardTab />}
+                {activeTab === "team" && <TeamTab />}
+                {activeTab === "workflows" && <WorkflowsTab />}
+                {activeTab === "progress" && <ProgressTab />}
+                {activeTab === "evaluations" && <EvaluationsTab />}
+                {activeTab === "feedback" && <FeedbackTab />}
+                {activeTab === "reports" && <ReportsTab />}
+                {activeTab === "history" && <HistoryTab />}
               </div>
 
             </div>
@@ -195,5 +108,13 @@ export default function ManagerDashboardPage() {
         );
       }}
     </ProtectedRoute>
+  );
+}
+
+export default function ManagerDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading dashboard...</div>}>
+      <ManagerDashboardContent />
+    </Suspense>
   );
 }

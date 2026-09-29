@@ -2,7 +2,7 @@
 
 import React from "react";
 
-export default function DashboardTab() {
+export default function DashboardTab({ assignedBatches, assignedLearnerCount }: { assignedBatches: string[]; assignedLearnerCount: number }) {
   return (
     <div className="text-center py-12 border border-dashed border-outline-variant/60 rounded-xl bg-surface-container-lowest">
       <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">

@@ -2,35 +2,31 @@
 
 import React from "react";
 import Link from "next/link";
-import { usePathname, useSearchParams } from "next/navigation";
-import { ManagerTab } from "./types";
+import { usePathname } from "next/navigation";
 
-const tabs: { id: ManagerTab; label: string; icon: string }[] = [
-  { id: "dashboard", label: "Dashboard", icon: "dashboard" },
-  { id: "team", label: "My Team", icon: "group" },
-  { id: "workflows", label: "Workflows", icon: "schema" },
-  { id: "progress", label: "Progress", icon: "monitoring" },
-  { id: "evaluations", label: "Evaluations", icon: "assignment_turned_in" },
-  { id: "feedback", label: "Feedback", icon: "reviews" },
-  { id: "reports", label: "Reports", icon: "insights" },
-  { id: "history", label: "History", icon: "history" },
+const tabs: { id: string; label: string; icon: string; path: string }[] = [
+  { id: "dashboard", label: "Dashboard", icon: "dashboard", path: "/dashboard/manager" },
+  { id: "team", label: "My Team", icon: "group", path: "/dashboard/manager/team" },
+  { id: "workflows", label: "Workflows", icon: "schema", path: "/dashboard/manager/workflows" },
+  { id: "progress", label: "Progress", icon: "monitoring", path: "/dashboard/manager/progress" },
+  { id: "evaluations", label: "Evaluations", icon: "assignment_turned_in", path: "/dashboard/manager/evaluations" },
+  { id: "feedback", label: "Feedback", icon: "reviews", path: "/dashboard/manager/feedback" },
+  { id: "reports", label: "Reports", icon: "insights", path: "/dashboard/manager/reports" },
+  { id: "history", label: "History", icon: "history", path: "/dashboard/manager/history" },
 ];
 
-export default function ManagerNavTabs({ activeTab }: { activeTab: ManagerTab }) {
+export default function ManagerNavTabs() {
   const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   return (
     <div className="flex items-center gap-2 overflow-x-auto border-b border-outline-variant/30 pb-2 text-body-sm font-medium">
       {tabs.map((tab) => {
-        const isActive = activeTab === tab.id;
-        const newParams = new URLSearchParams(searchParams.toString());
-        newParams.set("tab", tab.id);
+        const isActive = pathname === tab.path;
 
         return (
           <Link
             key={tab.id}
-            href={`${pathname}?${newParams.toString()}`}
+            href={tab.path}
             className={`px-4 py-2 rounded-xl transition-all flex items-center gap-2 whitespace-nowrap ${
               isActive
                 ? "bg-[#4B2EF5] text-white shadow-xs"

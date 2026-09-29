@@ -1,67 +1,75 @@
 "use client";
 
-export interface UserRole {
-  id: string;
-  name: string;
-  description?: string | null;
-}
+import { z } from "zod";
 
-export interface UserProfile {
-  profile_type: string;
-  profile_id?: string | null;
-  department?: string | null;
-  specialization?: string | null;
-  enrollment_no?: string | null;
-}
+export const UserRoleSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string().nullable().optional(),
+});
+export type UserRole = z.infer<typeof UserRoleSchema>;
 
-export interface UserScope {
-  scope_type: string;
-  assigned_batch_ids?: string[];
-  assigned_student_ids?: string[];
-  assigned_workflow_ids?: string[];
-  details?: Record<string, unknown>;
-}
+export const UserProfileSchema = z.object({
+  profile_type: z.string(),
+  profile_id: z.string().nullable().optional(),
+  department: z.string().nullable().optional(),
+  specialization: z.string().nullable().optional(),
+  enrollment_no: z.string().nullable().optional(),
+});
+export type UserProfile = z.infer<typeof UserProfileSchema>;
 
-export interface UserDetail {
-  id: string;
-  email: string;
-  name?: string | null;
-  is_active: boolean;
-  must_change_password: boolean;
-  /** Sign-in provider bound to this identity: "password" or "microsoft". */
-  auth_provider?: string | null;
-  created_at?: string | null;
-  last_updated_at?: string | null;
-  role: UserRole;
-  profile?: UserProfile | null;
-  scope?: UserScope | null;
-}
+export const UserScopeSchema = z.object({
+  scope_type: z.string(),
+  assigned_batch_ids: z.array(z.string()).optional(),
+  assigned_student_ids: z.array(z.string()).optional(),
+  assigned_workflow_ids: z.array(z.string()).optional(),
+  details: z.record(z.string(), z.unknown()).optional(),
+});
+export type UserScope = z.infer<typeof UserScopeSchema>;
 
-export interface UserSession {
-  token: string;
-  tokenType: string;
-  expiresIn?: number | null;
-  mustChangePassword: boolean;
-  user: UserDetail;
-  role?: UserRole | null;
-  profile?: UserProfile | null;
-  scope?: UserScope | null;
-  loginAt: string;
-}
+export const UserDetailSchema = z.object({
+  id: z.string(),
+  email: z.string(),
+  name: z.string().nullable().optional(),
+  is_active: z.boolean(),
+  must_change_password: z.boolean(),
+  auth_provider: z.string().nullable().optional(),
+  created_at: z.string().nullable().optional(),
+  last_updated_at: z.string().nullable().optional(),
+  role: UserRoleSchema,
+  profile: UserProfileSchema.nullable().optional(),
+  scope: UserScopeSchema.nullable().optional(),
+});
+export type UserDetail = z.infer<typeof UserDetailSchema>;
 
-export interface LoginResponseData {
-  access_token: string;
-  token_type: string;
-  expires_in?: number | null;
-  must_change_password: boolean;
-  user: {
-    id: string;
-    email: string;
-    name?: string | null;
-    role_name: string;
-    is_active: boolean;
-  };
-}
+export const UserSessionSchema = z.object({
+  token: z.string(),
+  tokenType: z.string(),
+  expiresIn: z.number().nullable().optional(),
+  mustChangePassword: z.boolean(),
+  user: UserDetailSchema,
+  role: UserRoleSchema.nullable().optional(),
+  profile: UserProfileSchema.nullable().optional(),
+  scope: UserScopeSchema.nullable().optional(),
+  loginAt: z.string(),
+});
+export type UserSession = z.infer<typeof UserSessionSchema>;
+
+export const LoginResponseDataSchema = z.object({
+  access_token: z.string(),
+  token_type: z.string(),
+  expires_in: z.number().nullable().optional(),
+  must_change_password: z.boolean(),
+  user: z.object({
+    id: z.string(),
+    email: z.string(),
+    name: z.string().nullable().optional(),
+    role_name: z.string(),
+    is_active: z.boolean(),
+  }),
+});
+export type LoginResponseData = z.infer<typeof LoginResponseDataSchema>;
+
 
 const PROFILE_SESSION_KEY = "dailoqa_pms_profile_session";
 const LEGACY_TOKEN_SESSION_KEY = "dailoqa_pms_auth_session";
@@ -235,7 +243,12 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
     throw new AuthError(message, response.status, code || "AUTH_ERROR");
   }
 
-  return data as LoginResponseData;
+  const result = LoginResponseDataSchema.safeParse(data);
+  if (!result.success) {
+    throw new AuthError("Invalid response format from server.", 500, "VALIDATION_ERROR");
+  }
+
+  return result.data;
 }
 
 export async function fetchMe(): Promise<UserDetail> {
@@ -260,7 +273,12 @@ export async function fetchMe(): Promise<UserDetail> {
     throw new AuthError(message, response.status, code || "PROFILE_ERROR");
   }
 
-  return data as UserDetail;
+  const result = UserDetailSchema.safeParse(data);
+  if (!result.success) {
+    throw new AuthError("Invalid response format from server.", 500, "VALIDATION_ERROR");
+  }
+
+  return result.data;
 }
 
 export async function apiGetMe(token?: string | null): Promise<UserDetail> {
@@ -290,7 +308,12 @@ export async function apiGetMe(token?: string | null): Promise<UserDetail> {
     throw new AuthError(message, response.status, code || "PROFILE_ERROR");
   }
 
-  return data as UserDetail;
+  const result = UserDetailSchema.safeParse(data);
+  if (!result.success) {
+    throw new AuthError("Invalid response format from server.", 500, "VALIDATION_ERROR");
+  }
+
+  return result.data;
 }
 
 export async function apiChangePassword(

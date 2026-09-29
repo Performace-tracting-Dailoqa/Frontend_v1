@@ -6,6 +6,8 @@ export const metadata: Metadata = {
   description: "Teacher and Student Performance, Learning, and Mentorship Platform",
 };
 
+import Providers from "./providers";
+
 export default function RootLayout({
   children,
 }: {
@@ -26,8 +28,8 @@ export default function RootLayout({
         />
       </head>
       <body className="min-h-full bg-surface text-on-surface font-body antialiased selection:bg-primary selection:text-white">
-                {children}
-                    </body>
+        <Providers>{children}</Providers>
+      </body>
     </html>
   );
 }

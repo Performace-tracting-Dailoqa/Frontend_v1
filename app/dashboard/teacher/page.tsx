@@ -141,9 +141,7 @@ function TeacherDashboardContent() {
               </div>
 
               {/* Active Tab Content */}
-              {activeTab === "dashboard" && (
-                <DashboardTab assignedBatches={assignedBatches} assignedLearnerCount={assignedLearnerCount} />
-              )}
+              {activeTab === "dashboard" && <DashboardTab />}
               {activeTab === "learners" && <LearnersTab />}
               {activeTab === "progress" && <ProgressTab />}
               {activeTab === "japanese" && <JapaneseTab />}

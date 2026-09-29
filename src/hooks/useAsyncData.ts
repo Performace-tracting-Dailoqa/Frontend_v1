@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
+import { invalidateCache } from "@/services/dataCache";
 
 /**
  * Minimal async data hook for the Superuser dashboard pages.
@@ -86,7 +87,18 @@ export function useAsyncData<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [...deps, enabled]);
 
+  // Periodic 1-hour background refresh
+  useEffect(() => {
+    if (!enabled) return;
+    const interval = setInterval(() => {
+      invalidateCache();
+      void run();
+    }, 60 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [enabled, run]);
+
   const reload = useCallback(() => {
+    invalidateCache();
     void run();
   }, [run]);
 
@@ -105,3 +117,4 @@ export function useAsyncData<T>(
     setData: updateData,
   };
 }
+

@@ -136,6 +136,7 @@ export function isUserLoggedIn(): boolean {
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
+  // eslint-disable-next-line @next/next/no-location-assign-relative-destination
   window.location.href = "/api/auth/microsoft";
 }
 

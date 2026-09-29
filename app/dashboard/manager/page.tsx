@@ -1,7 +1,7 @@
 "use client";
 
 import React, { Suspense, useState, useEffect, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { ManagerTab } from "@/components/manager/types";
@@ -38,6 +38,7 @@ import HistoryTab from "@/components/manager/tabs/HistoryTab";
 
 function ManagerDashboardContent() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const tabParam = searchParams.get("tab") as ManagerTab | null;
   const activeTab: ManagerTab = tabParam || "dashboard";
 
@@ -89,10 +90,10 @@ function ManagerDashboardContent() {
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
       if (hash && ["team", "workflows", "progress", "evaluations", "feedback", "reports", "history"].includes(hash)) {
-        setActiveTab(hash as "dashboard" | "team" | "workflows" | "progress" | "evaluations" | "feedback" | "reports" | "history");
+        router.replace(`?tab=${hash}`);
       }
     }
-  }, []);
+  }, [router]);
 
   // Load Authorized Team Members
   const loadTeamMembers = useCallback(async () => {

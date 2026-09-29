@@ -24,7 +24,7 @@ export default function TeacherLearnersTab() {
     loadData();
   }, []);
 
-  const loadData = async () => {
+  async function loadData() {
     setIsLoading(true);
     setError(null);
     try {

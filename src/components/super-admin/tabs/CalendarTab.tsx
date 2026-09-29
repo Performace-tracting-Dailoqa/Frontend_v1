@@ -1,337 +1,314 @@
 "use client";
 
-import React, { useState } from "react";
-import { motion, AnimatePresence } from "framer-motion";
-import { MOCK_ORGANISATIONS } from "../mockData";
+import React, { useMemo, useState } from "react";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+  calendarHint,
+  CalendarEvent,
+  CalendarEventsResponse,
+  CalendarStatus,
+  errorMessage,
+  fetchCalendarEvents,
+  fetchCalendarStatus,
+} from "@/services/calendarService";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageIntro,
+  Pill,
+  PrimaryButton,
+  SectionCard,
+  UnavailableState,
+} from "../SuperAdminUi";
 
-interface CalendarEvent {
-  id: string;
-  title: string;
-  orgName: string;
-  orgCode: string;
-  time: string;
-  date: string; // e.g. "Oct 19, 2026"
-  category: "infrastructure" | "workshop" | "evaluation" | "sync" | "billing";
-  categoryLabel: string;
-  microsoftTeamsUrl?: string;
-  attendees: Array<{ name: string; email: string; initials: string }>;
-  description?: string;
+/** How the event text should be coloured, based on the Graph `showAs` value. */
+const SHOW_AS_TONE: Record<string, string> = {
+  free: "border-l-slate-300",
+  tentative: "border-l-amber-400",
+  busy: "border-l-[#4B2EF5]",
+  oof: "border-l-rose-400",
+  workingElsewhere: "border-l-teal-400",
+};
+
+/** Month-grid dot colour, keyed by the Graph `showAs` value. */
+const SHOW_AS_DOT: Record<string, string> = {
+  free: "bg-slate-300",
+  tentative: "bg-amber-400",
+  busy: "bg-[#4B2EF5]",
+  oof: "bg-rose-400",
+  workingElsewhere: "bg-teal-400",
+};
+
+const WEEKDAY = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const MONTH = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function toIsoDate(value: Date): string {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(
+    value.getDate()
+  ).padStart(2, "0")}`;
 }
 
-const MONTH_NAMES = [
-  "January", "February", "March", "April", "May", "June",
-  "July", "August", "September", "October", "November", "December"
-];
+function startOfMonth(value: Date): Date {
+  return new Date(value.getFullYear(), value.getMonth(), 1);
+}
 
-const SHORT_MONTHS = [
-  "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-  "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
-];
+function addMonths(value: Date, delta: number): Date {
+  return new Date(value.getFullYear(), value.getMonth() + delta, 1);
+}
 
-const INITIAL_EVENTS: CalendarEvent[] = [
-  {
-    id: "evt-1",
-    title: "AWS DB Cluster Maintenance",
-    orgName: "Platform Infrastructure HQ",
-    orgCode: "PL",
-    time: "02:00 UTC",
-    date: "Oct 5, 2026",
-    category: "infrastructure",
-    categoryLabel: "Platform Maintenance",
-    description: "Multi-AZ PostgreSQL cluster patching and failover health verification.",
-    attendees: [
-      { name: "Marcus Brody", email: "admin@dailoqa.com", initials: "MB" },
-      { name: "SRE Bot", email: "sre-infra@dailoqa.com", initials: "SR" },
-    ],
-  },
-  {
-    id: "evt-2",
-    title: "JLPT N3 Batch Keigo Etiquette Workshop",
-    orgName: "MiRai Language Institute",
-    orgCode: "MLI",
-    time: "05:30 UTC",
-    date: "Oct 8, 2026",
-    category: "workshop",
-    categoryLabel: "Batch Workshop",
-    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/abc-mirai-n3",
-    description: "Oral business Japanese keigo masterclass with peer evaluations.",
-    attendees: [
-      { name: "Prof. Arthur Vance", email: "vance@mirai.ac.jp", initials: "AV" },
-      { name: "Kanishka Sharma", email: "k.sharma@mirai.ac.jp", initials: "KS" },
-    ],
-  },
-  {
-    id: "evt-3",
-    title: "Acme Corp Q3 Self-Evaluations Open",
-    orgName: "Global Tech Innovations",
-    orgCode: "GTI",
-    time: "10:00 UTC",
-    date: "Oct 12, 2026",
-    category: "evaluation",
-    categoryLabel: "Evaluation Cycle",
-    description: "Launch of trainee self-evaluations across Tokyo engineering cohorts.",
-    attendees: [
-      { name: "Elena Rostova", email: "e.rostova@globaltech.io", initials: "ER" },
-    ],
-  },
-  {
-    id: "evt-4",
-    title: "Kyoto Digital Mid-Quarter Progress Review",
-    orgName: "Kyoto Digital Academy",
-    orgCode: "KDA",
-    time: "08:00 UTC",
-    date: "Oct 15, 2026",
-    category: "workshop",
-    categoryLabel: "Evaluation Review",
-    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/kda-prog-rev",
-    description: "Cross-department performance checkpoints and mentor ratings.",
-    attendees: [
-      { name: "Samantha Vance", email: "s.vance@kyotodigital.edu", initials: "SV" },
-    ],
-  },
-  {
-    id: "evt-5",
-    title: "Global SRE & Superuser Infrastructure Sync",
-    orgName: "Dailoqa Master Infrastructure",
-    orgCode: "PL",
-    time: "13:00 UTC",
-    date: "Oct 19, 2026",
-    category: "sync",
-    categoryLabel: "Superuser Direct",
-    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/sre-super-sync",
-    description: "Bi-weekly superuser cross-tenant performance check and database metrics.",
-    attendees: [
-      { name: "Marcus Brody", email: "admin@dailoqa.com", initials: "MB" },
-      { name: "Ayush V Panicker", email: "ayush.v.panicker@dailoqa.com", initials: "AP" },
-    ],
-  },
-  {
-    id: "evt-6",
-    title: "NeoTech Enterprise Plan Grace Period Ends",
-    orgName: "NeoTech Osaka Consortium",
-    orgCode: "NOC",
-    time: "23:59 UTC",
-    date: "Oct 21, 2026",
-    category: "billing",
-    categoryLabel: "Billing Cap Deadline",
-    description: "Final invoice settlement notice before storage quota tier restriction.",
-    attendees: [
-      { name: "Kenji Sato", email: "k.sato@neotech-osaka.co.jp", initials: "KS" },
-    ],
-  },
-  {
-    id: "evt-7",
-    title: "JLPT N2 Oral Fluency Live Mock Exam",
-    orgName: "MiRai Language Institute",
-    orgCode: "MLI",
-    time: "09:00 UTC",
-    date: "Oct 26, 2026",
-    category: "workshop",
-    categoryLabel: "Cohort Exam",
-    microsoftTeamsUrl: "https://teams.microsoft.com/l/meetup-join/mirai-n2-exam",
-    description: "Faculty proctored oral evaluation with Teams recordings enabled.",
-    attendees: [
-      { name: "Prof. Arthur Vance", email: "vance@mirai.ac.jp", initials: "AV" },
-      { name: "Amelia Earhart", email: "amelia@mirai.ac.jp", initials: "AE" },
-    ],
-  },
-];
+/** Parse a Graph start value into a local Date, treating all-day values as midnight. */
+function parseEventStart(value: string | null): Date | null {
+  if (!value) return null;
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? null : parsed;
+}
+
+function formatTime(value: string | null, isAllDay: boolean): string {
+  if (isAllDay) return "All day";
+  if (!value) return "—";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+}
+
+function eventAccentClass(event: CalendarEvent): string {
+  return SHOW_AS_TONE[(event.show_as ?? "busy").toLowerCase()] ?? "border-l-[#4B2EF5]";
+}
+
+/** Month grid: 6 weeks of days starting on the Sunday of the first row. */
+function buildMonthGrid(anchor: Date): Date[] {
+  const first = startOfMonth(anchor);
+  const gridStart = new Date(first);
+  gridStart.setDate(first.getDate() - first.getDay());
+
+  return Array.from({ length: 42 }, (_, index) => {
+    const day = new Date(gridStart);
+    day.setDate(gridStart.getDate() + index);
+    return day;
+  });
+}
+
+interface MonthGridProps {
+  anchor: Date;
+  today: Date;
+  eventsByDay: Map<string, CalendarEvent[]>;
+  onSelectDay: (day: Date) => void;
+  selectedDay: string | null;
+}
+
+function MonthGrid({ anchor, today, eventsByDay, onSelectDay, selectedDay }: MonthGridProps) {
+  const days = useMemo(() => buildMonthGrid(anchor), [anchor]);
+  const monthIndex = anchor.getMonth();
+
+  return (
+    <div>
+      <div className="grid grid-cols-7 gap-1 mb-1">
+        {WEEKDAY.map((day) => (
+          <div key={day} className="text-center text-[10px] font-bold text-slate-400 uppercase py-1">
+            {day}
+          </div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-1">
+        {days.map((day) => {
+          const key = toIsoDate(day);
+          const dayEvents = eventsByDay.get(key) ?? [];
+          const inMonth = day.getMonth() === monthIndex;
+          const isToday = key === toIsoDate(today);
+          const isSelected = key === selectedDay;
+
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => onSelectDay(day)}
+              className={`relative aspect-square rounded-lg border p-1 text-left transition-all cursor-pointer ${
+                isSelected
+                  ? "border-[#4B2EF5] ring-2 ring-[#4B2EF5]/20 bg-primary/5"
+                  : inMonth
+                    ? "border-slate-200/80 hover:border-slate-300 hover:bg-slate-50"
+                    : "border-slate-100 bg-slate-50/40 text-slate-300"
+              }`}
+            >
+              <span
+                className={`text-[11px] font-bold ${
+                  isToday
+                    ? "text-white bg-[#4B2EF5] rounded-full w-5 h-5 flex items-center justify-center"
+                    : inMonth
+                      ? "text-slate-700"
+                      : "text-slate-300"
+                }`}
+              >
+                {day.getDate()}
+              </span>
+              {dayEvents.length > 0 && (
+                <div className="absolute bottom-1 left-1 right-1 flex gap-0.5">
+                  {dayEvents.slice(0, 4).map((event) => (
+                    <span
+                      key={event.id}
+                      title={event.subject}
+                      className={`h-1 flex-1 rounded-full ${SHOW_AS_DOT[(event.show_as ?? "busy").toLowerCase()] ?? "bg-[#4B2EF5]"}`}
+                    />
+                  ))}
+                </div>
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function EventList({ events, emptyLabel }: { events: CalendarEvent[]; emptyLabel: string }) {
+  if (events.length === 0) {
+    return <p className="text-xs text-slate-400 text-center py-8">{emptyLabel}</p>;
+  }
+
+  return (
+    <ul className="space-y-2">
+      {events.map((event) => (
+        <motion.li
+          key={event.id}
+          initial={{ opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.18 }}
+          className={`p-3 rounded-xl border border-slate-200/80 border-l-4 bg-white ${eventAccentClass(event)}`}
+        >
+          <div className="flex flex-wrap items-start justify-between gap-2">
+            <h4 className="text-xs font-bold text-slate-900 min-w-0">{event.subject}</h4>
+            <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+              {event.is_online_meeting && (
+                <Pill tone="primary">
+                  <span className="material-symbols-outlined text-[12px]">videocam</span>
+                  Teams
+                </Pill>
+              )}
+              {(event.categories ?? []).slice(0, 1).map((category) => (
+                <Pill key={category} tone="slate">
+                  {category}
+                </Pill>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-[11px] text-slate-500 mt-1 flex items-center gap-1.5 flex-wrap">
+            <span className="material-symbols-outlined text-[13px]">schedule</span>
+            {formatTime(event.start, event.is_all_day)}
+            {!event.is_all_day && event.end ? ` – ${formatTime(event.end, false)}` : ""}
+            {event.time_zone && event.time_zone !== "UTC" ? ` (${event.time_zone})` : ""}
+          </p>
+
+          {event.location && (
+            <p className="text-[11px] text-slate-500 mt-0.5 flex items-center gap-1.5">
+              <span className="material-symbols-outlined text-[13px]">location_on</span>
+              {event.location}
+            </p>
+          )}
+          {event.organizer && (
+            <p className="text-[11px] text-slate-400 mt-0.5 flex items-center gap-1.5 truncate">
+              <span className="material-symbols-outlined text-[13px]">person</span>
+              {event.organizer_name ? `${event.organizer_name} · ` : ""}
+              <span className="font-mono">{event.organizer}</span>
+            </p>
+          )}
+          {event.body_preview && (
+            <p className="text-[11px] text-slate-500 mt-2 line-clamp-2 border-t border-slate-100 pt-2">
+              {event.body_preview}
+            </p>
+          )}
+        </motion.li>
+      ))}
+    </ul>
+  );
+}
 
 export default function CalendarTab() {
-  // Calendar dynamic date state (defaulting to October 2026 matching system mock timeline)
-  const [currentYear, setCurrentYear] = useState(2026);
-  const [currentMonth, setCurrentMonth] = useState(9); // 0-indexed: 9 = October
-  const [selectedDay, setSelectedDay] = useState<number>(19); // Oct 19 is active today
+  const [anchor, setAnchor] = useState(() => startOfMonth(new Date()));
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
+  const [view, setView] = useState<"month" | "agenda">("month");
+  const [status, setStatus] = useState<CalendarStatus | null>(null);
+  const [statusError, setStatusError] = useState<string | null>(null);
+  const [eventsError, setEventsError] = useState<string | null>(null);
+  const [isChecking, setIsChecking] = useState(true);
+  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
+  const [events, setEvents] = useState<CalendarEventsResponse | null>(null);
+  const [today] = useState(() => new Date());
 
-  const [events, setEvents] = useState<CalendarEvent[]>(INITIAL_EVENTS);
-  const [viewMode, setViewMode] = useState<"month" | "week" | "day">("month");
-  const [scopeFilter, setScopeFilter] = useState<"all" | "org" | "my">("all");
-  const [connectionState, setConnectionState] = useState<"connected" | "disconnected" | "error">("connected");
-  const [isSyncing, setIsSyncing] = useState(false);
-  const [lastSyncTime, setLastSyncTime] = useState("Just now");
-  const [selectedEvent, setSelectedEvent] = useState<CalendarEvent | null>(null);
-  const [isNewEventModalOpen, setIsNewEventModalOpen] = useState(false);
+  // The window is padded a week either side so the 6-week month grid is covered.
+  const range = useMemo(() => {
+    const start = new Date(anchor);
+    start.setDate(1);
+    start.setDate(start.getDate() - 7);
+    const end = new Date(anchor);
+    end.setMonth(end.getMonth() + 1, 1);
+    end.setDate(end.getDate() + 7);
+    return { start: toIsoDate(start), end: toIsoDate(end) };
+  }, [anchor]);
 
-  // New Event Form State
-  const [newTitle, setNewTitle] = useState("");
-  const [newOrg, setNewOrg] = useState(MOCK_ORGANISATIONS[0].name);
-  const [newDate, setNewDate] = useState("Oct 19, 2026");
-  const [newTime, setNewTime] = useState("10:00 UTC");
-  const [newCategory, setNewCategory] = useState<CalendarEvent["category"]>("sync");
-
-  // Toast Notification
-  const [toastMessage, setToastMessage] = useState<string | null>(null);
-  const showToast = (msg: string) => {
-    setToastMessage(msg);
-    setTimeout(() => {
-      setToastMessage((prev) => (prev === msg ? null : prev));
-    }, 3500);
-  };
-
-  // Helper date calculations
-  const monthName = MONTH_NAMES[currentMonth];
-  const shortMonth = SHORT_MONTHS[currentMonth];
-  const daysInCurrentMonth = new Date(currentYear, currentMonth + 1, 0).getDate();
-  // Monday-based first day of month (0 = Mon, 6 = Sun)
-  const firstDayOfMonth = (new Date(currentYear, currentMonth, 1).getDay() + 6) % 7;
-  const daysInPrevMonth = new Date(currentYear, currentMonth, 0).getDate();
-
-  // Selected date formatted
-  const selectedDateStr = `${shortMonth} ${selectedDay}, ${currentYear}`;
-
-  // Month navigation handlers
-  const handlePrev = () => {
-    if (viewMode === "day") {
-      if (selectedDay > 1) {
-        setSelectedDay((d) => d - 1);
-      } else {
-        const prevM = currentMonth === 0 ? 11 : currentMonth - 1;
-        const prevY = currentMonth === 0 ? currentYear - 1 : currentYear;
-        const daysInPrev = new Date(prevY, prevM + 1, 0).getDate();
-        setCurrentMonth(prevM);
-        setCurrentYear(prevY);
-        setSelectedDay(daysInPrev);
-      }
-      return;
+  const checkStatus = React.useCallback(async () => {
+    setIsChecking(true);
+    setStatusError(null);
+    try {
+      setStatus(await fetchCalendarStatus());
+    } catch (caught) {
+      setStatus(null);
+      setStatusError(errorMessage(caught, "Could not check the Microsoft calendar connection."));
+    } finally {
+      setIsChecking(false);
     }
+  }, []);
 
-    if (viewMode === "week") {
-      if (selectedDay > 7) {
-        setSelectedDay((d) => d - 7);
-      } else {
-        const prevM = currentMonth === 0 ? 11 : currentMonth - 1;
-        const prevY = currentMonth === 0 ? currentYear - 1 : currentYear;
-        const daysInPrev = new Date(prevY, prevM + 1, 0).getDate();
-        setCurrentMonth(prevM);
-        setCurrentYear(prevY);
-        setSelectedDay(Math.max(1, daysInPrev - 7));
-      }
-      return;
+  const loadEvents = React.useCallback(async () => {
+    setIsLoadingEvents(true);
+    setEventsError(null);
+    try {
+      setEvents(
+        await fetchCalendarEvents({ startDate: range.start, endDate: range.end })
+      );
+    } catch (caught) {
+      setEvents(null);
+      setEventsError(errorMessage(caught, "Could not load the Microsoft calendar."));
+    } finally {
+      setIsLoadingEvents(false);
     }
+  }, [range.start, range.end]);
 
-    // Month view navigation
-    if (currentMonth === 0) {
-      setCurrentMonth(11);
-      setCurrentYear((y) => y - 1);
-    } else {
-      setCurrentMonth((m) => m - 1);
+  React.useEffect(() => {
+    void checkStatus();
+  }, [checkStatus]);
+
+  React.useEffect(() => {
+    void loadEvents();
+  }, [loadEvents]);
+
+  const eventsByDay = useMemo(() => {
+    const map = new Map<string, CalendarEvent[]>();
+    for (const event of events?.events ?? []) {
+      const start = parseEventStart(event.start);
+      if (!start) continue;
+      const key = toIsoDate(start);
+      const bucket = map.get(key);
+      if (bucket) bucket.push(event);
+      else map.set(key, [event]);
     }
-    showToast(`Navigated to ${MONTH_NAMES[currentMonth === 0 ? 11 : currentMonth - 1]} ${currentMonth === 0 ? currentYear - 1 : currentYear}`);
-  };
-
-  const handleNext = () => {
-    if (viewMode === "day") {
-      if (selectedDay < daysInCurrentMonth) {
-        setSelectedDay((d) => d + 1);
-      } else {
-        const nextM = currentMonth === 11 ? 0 : currentMonth + 1;
-        const nextY = currentMonth === 11 ? currentYear + 1 : currentYear;
-        setCurrentMonth(nextM);
-        setCurrentYear(nextY);
-        setSelectedDay(1);
-      }
-      return;
+    for (const bucket of map.values()) {
+      bucket.sort((a, b) => (a.start ?? "").localeCompare(b.start ?? ""));
     }
+    return map;
+  }, [events]);
 
-    if (viewMode === "week") {
-      if (selectedDay + 7 <= daysInCurrentMonth) {
-        setSelectedDay((d) => d + 7);
-      } else {
-        const nextM = currentMonth === 11 ? 0 : currentMonth + 1;
-        const nextY = currentMonth === 11 ? currentYear + 1 : currentYear;
-        setCurrentMonth(nextM);
-        setCurrentYear(nextY);
-        setSelectedDay(1);
-      }
-      return;
-    }
+  const allEvents = useMemo(
+    () => [...(events?.events ?? [])].sort((a, b) => (a.start ?? "").localeCompare(b.start ?? "")),
+    [events]
+  );
 
-    // Month view navigation
-    if (currentMonth === 11) {
-      setCurrentMonth(0);
-      setCurrentYear((y) => y + 1);
-    } else {
-      setCurrentMonth((m) => m + 1);
-    }
-    showToast(`Navigated to ${MONTH_NAMES[currentMonth === 11 ? 0 : currentMonth + 1]} ${currentMonth === 11 ? currentYear + 1 : currentYear}`);
-  };
-
-  const handleToday = () => {
-    setCurrentYear(2026);
-    setCurrentMonth(9); // October
-    setSelectedDay(19);
-    showToast("Returned to today: Oct 19, 2026");
-  };
-
-  const handleQuickSync = () => {
-    setIsSyncing(true);
-    setTimeout(() => {
-      setIsSyncing(false);
-      setLastSyncTime("Just now");
-      showToast("Microsoft Graph bi-directional calendar sync verified.");
-    }, 1100);
-  };
-
-  const handleCreateEvent = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTitle) return;
-
-    const orgRecord = MOCK_ORGANISATIONS.find((o) => o.name === newOrg);
-    const createdEvent: CalendarEvent = {
-      id: `evt-${Date.now()}`,
-      title: newTitle,
-      orgName: newOrg,
-      orgCode: orgRecord?.code || "ORG",
-      time: newTime,
-      date: newDate,
-      category: newCategory,
-      categoryLabel:
-        newCategory === "sync"
-          ? "Superuser Direct"
-          : newCategory === "workshop"
-          ? "Cohort Workshop"
-          : newCategory === "evaluation"
-          ? "Evaluation Cycle"
-          : "Platform Maintenance",
-      microsoftTeamsUrl: `https://teams.microsoft.com/l/meetup-join/${Math.random().toString(36).substring(2, 6)}`,
-      attendees: [
-        { name: "Marcus Brody", email: "admin@dailoqa.com", initials: "MB" },
-        { name: "Staff Member", email: "staff@dailoqa.com", initials: "SM" },
-      ],
-      description: "Synchronized cross-tenant event created via Superuser Console.",
-    };
-
-    setEvents((prev) => [createdEvent, ...prev]);
-    setIsNewEventModalOpen(false);
-    setNewTitle("");
-    showToast(`Scheduled: "${createdEvent.title}" on ${createdEvent.date}`);
-  };
-
-  const handleDeleteEvent = (id: string) => {
-    setEvents((prev) => prev.filter((e) => e.id !== id));
-    setSelectedEvent(null);
-    showToast("Event cancelled and removed from Microsoft Calendar.");
-  };
-
-  const filteredEvents = events.filter((evt) => {
-    if (scopeFilter === "my") {
-      return evt.category === "sync" || evt.attendees.some((a) => a.email.includes("admin@dailoqa.com"));
-    }
-    if (scopeFilter === "org") {
-      return evt.orgCode !== "PL";
-    }
-    return true;
-  });
-
-  // Events on selected day
-  const selectedDayEvents = filteredEvents.filter((e) => e.date === selectedDateStr);
-
-  // Week calculation for week view
-  const weekStartDay = Math.max(1, selectedDay - 3);
-  const weekDays = Array.from({ length: 7 }, (_, i) => {
-    const d = weekStartDay + i;
-    return d <= daysInCurrentMonth ? d : null;
-  }).filter(Boolean) as number[];
+  const selectedDayEvents = selectedDay ? (eventsByDay.get(selectedDay) ?? []) : [];
+  const canShowCalendar = status?.connected === true;
 
   return (
     <motion.div
@@ -340,852 +317,209 @@ export default function CalendarTab() {
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-6"
     >
-      {/* 1. TOP HERO & CONNECTION STATUS HEADER */}
-      <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col xl:flex-row items-start xl:items-center justify-between gap-5">
-        <div className="flex flex-col space-y-1.5 min-w-0">
-          <div className="flex items-center gap-3 flex-wrap">
-            <h1 className="text-xl font-bold text-slate-900 tracking-tight">Microsoft Calendar</h1>
-            <span className="px-2.5 py-0.5 rounded-full bg-primary/10 text-primary text-[11px] font-bold tracking-wide">
-              SUPERUSER OVERLAY
-            </span>
-            <span className="text-xs text-slate-400 font-medium">· Last synced {lastSyncTime}</span>
-          </div>
-          <p className="text-xs text-slate-500 max-w-3xl">
-            Signed-in Superuser Microsoft Calendar view. Backend Graph API sync displays events once endpoint is active.
-          </p>
-        </div>
-
-        {/* Diagnostics & State Simulator */}
-        <div className="flex flex-wrap items-center gap-3">
-          {/* Status Badge */}
-          <div className="flex items-center gap-2.5 px-3.5 py-2 rounded-xl bg-slate-50 border border-slate-200/80 text-xs shadow-2xs">
-            <svg className="w-4 h-4 shrink-0" viewBox="0 0 23 23">
-              <path fill="#f35325" d="M1 1h10v10H1z"/>
-              <path fill="#81bc06" d="M12 1h10v10H12z"/>
-              <path fill="#05a6f0" d="M1 12h10v10H1z"/>
-              <path fill="#ffba08" d="M12 12h10v10H12z"/>
-            </svg>
-            <span className="relative flex h-2 w-2">
-              <span className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
-                connectionState === "connected" ? "bg-emerald-400" : connectionState === "disconnected" ? "bg-amber-400" : "bg-red-400"
-              }`} />
-              <span className={`relative inline-flex rounded-full h-2 w-2 ${
-                connectionState === "connected" ? "bg-emerald-500" : connectionState === "disconnected" ? "bg-amber-500" : "bg-red-500"
-              }`} />
-            </span>
-            <span className="font-semibold text-slate-800">
-              {connectionState === "connected" ? "admin@dailoqa.com (Online)" : connectionState === "disconnected" ? "Offline Cache" : "Auth Token Expired"}
-            </span>
-          </div>
-
-          {/* Quick Sync */}
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={handleQuickSync}
-            className="flex items-center gap-1.5 px-3 py-2 rounded-xl bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 text-xs font-semibold shadow-xs cursor-pointer transition-colors"
-          >
-            <span className={`material-symbols-outlined text-base text-primary ${isSyncing ? "animate-spin" : ""}`}>
-              sync
-            </span>
-            <span>{isSyncing ? "Syncing..." : "Sync now"}</span>
-          </motion.button>
-
-          {/* Connection Simulator */}
-          <select
-            value={connectionState}
-            onChange={(e) => {
-              const s = e.target.value as "connected" | "disconnected" | "error";
-              setConnectionState(s);
-              showToast(`Sync Gateway switched to: ${s}`);
-            }}
-            className="h-9 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium text-slate-700 cursor-pointer focus:outline-none"
-          >
-            <option value="connected">State: Connected</option>
-            <option value="disconnected">State: Disconnected</option>
-            <option value="error">State: Token Expired</option>
-          </select>
-        </div>
-      </div>
-
-      {/* CONDITIONAL WARNING BANNERS */}
-      {connectionState === "disconnected" && (
-        <div className="p-4 rounded-2xl bg-amber-50 border border-amber-200 text-amber-800 text-xs flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl text-amber-600">cloud_off</span>
-            <div>
-              <p className="font-bold">Google Workspace Disconnected</p>
-              <p className="text-amber-700">Cross-tenant aggregation is cached from last sync. Connect an enterprise OAuth identity to resume.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setConnectionState("connected");
-              showToast("Google Workspace reconnected!");
-            }}
-            className="px-3.5 py-1.5 bg-amber-600 hover:bg-amber-700 text-white rounded-xl font-bold cursor-pointer transition-colors"
-          >
-            Reconnect
-          </button>
-        </div>
-      )}
-
-      {connectionState === "error" && (
-        <div className="p-4 rounded-2xl bg-red-50 border border-red-200 text-red-800 text-xs flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <span className="material-symbols-outlined text-xl text-red-600">error</span>
-            <div>
-              <p className="font-bold">Google OAuth Token Invalidation</p>
-              <p className="text-red-700">Refresh token expired for `admin@dailoqa.com`. Sync engine halted.</p>
-            </div>
-          </div>
-          <button
-            onClick={() => {
-              setConnectionState("connected");
-              showToast("OAuth credentials re-authenticated!");
-            }}
-            className="px-3.5 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold cursor-pointer transition-colors"
-          >
-            Re-authenticate
-          </button>
-        </div>
-      )}
-
-      {/* 2. CALENDAR TOOLBAR & CONTROLS */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-4">
-        {/* Left: View Mode Pills & Navigator */}
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex items-center p-1 bg-slate-100 rounded-xl">
-            {(["month", "week", "day"] as const).map((m) => (
+      <PageIntro
+        icon="calendar_month"
+        title="Microsoft Calendar"
+        description={
+          status?.mailbox
+            ? `Microsoft 365 schedule for ${status.mailbox}`
+            : "The superuser's Microsoft 365 schedule"
+        }
+        action={
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center rounded-xl border border-slate-200 overflow-hidden bg-slate-50">
               <button
-                key={m}
-                onClick={() => {
-                  setViewMode(m);
-                  showToast(`Switched to ${m} view`);
-                }}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold capitalize transition-all cursor-pointer ${
-                  viewMode === m
-                    ? "bg-white text-primary shadow-xs font-bold"
-                    : "text-slate-600 hover:text-slate-900"
+                type="button"
+                onClick={() => setView("month")}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer ${
+                  view === "month" ? "bg-[#4B2EF5] text-white" : "text-slate-600 hover:text-slate-900"
                 }`}
               >
-                {m}
+                Month
               </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleToday}
-            className="px-3 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-xs font-semibold text-slate-700 cursor-pointer transition-colors"
-          >
-            Today
-          </button>
-
-          <div className="flex items-center gap-1">
-            <button
-              onClick={handlePrev}
-              title="Previous"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">chevron_left</span>
-            </button>
-            <button
-              onClick={handleNext}
-              title="Next"
-              className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-500 hover:text-slate-800 cursor-pointer transition-colors"
-            >
-              <span className="material-symbols-outlined text-base">chevron_right</span>
-            </button>
-          </div>
-
-          <span className="text-sm font-bold text-slate-900 pl-1">
-            {viewMode === "day"
-              ? `${shortMonth} ${selectedDay}, ${currentYear}`
-              : `${monthName} ${currentYear}`}
-          </span>
-        </div>
-
-        {/* Center: Scope Toggle */}
-        <div className="flex items-center justify-center">
-          <div className="inline-flex p-1 bg-slate-100 rounded-xl text-xs font-medium">
-            <button
-              onClick={() => {
-                setScopeFilter("my");
-                showToast("Scope: My Direct Events");
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                scopeFilter === "my"
-                  ? "bg-white text-primary font-bold shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              My Events
-            </button>
-            <button
-              onClick={() => {
-                setScopeFilter("org");
-                showToast("Scope: Tenant Events");
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
-                scopeFilter === "org"
-                  ? "bg-white text-primary font-bold shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              This Organisation
-            </button>
-            <button
-              onClick={() => {
-                setScopeFilter("all");
-                showToast("Scope: Fleetwide All Organisations");
-              }}
-              className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer flex items-center gap-1.5 ${
-                scopeFilter === "all"
-                  ? "bg-[#4B2EF5] text-white font-bold shadow-xs"
-                  : "text-slate-600 hover:text-slate-900"
-              }`}
-            >
-              <span className="material-symbols-outlined text-sm">domain_verification</span>
-              <span>All Organisations</span>
-            </button>
-          </div>
-        </div>
-
-        {/* Right: + New Event Button */}
-        <div>
-          <motion.button
-            whileTap={{ scale: 0.96 }}
-            onClick={() => {
-              setNewDate(`${shortMonth} ${selectedDay}, ${currentYear}`);
-              setIsNewEventModalOpen(true);
-            }}
-            className="w-full sm:w-auto px-4 py-2 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white text-xs font-bold flex items-center justify-center gap-1.5 shadow-xs cursor-pointer transition-colors"
-          >
-            <span className="material-symbols-outlined text-lg">add</span>
-            <span>New Event</span>
-          </motion.button>
-        </div>
-      </div>
-
-      {/* 3. COLOR LEGEND & ORG BADGES */}
-      <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 mr-1">Legend:</span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-primary/10 text-primary text-[11px] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-primary" />
-            Superuser Direct Sync
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-indigo-50 text-indigo-700 text-[11px] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-indigo-600" />
-            Batch Workshops
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 text-[11px] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-amber-600" />
-            Evaluation Deadlines
-          </span>
-          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 text-[11px] font-semibold">
-            <span className="w-2 h-2 rounded-full bg-rose-600" />
-            Infrastructure Maintenance
-          </span>
-        </div>
-        <div className="text-[11px] text-slate-500">
-          Org Badges: <code className="px-1.5 py-0.5 rounded bg-slate-100 text-primary font-bold">[MLI]</code> MiRai ·{" "}
-          <code className="px-1.5 py-0.5 rounded bg-slate-100 text-primary font-bold">[GTI]</code> Global Tech ·{" "}
-          <code className="px-1.5 py-0.5 rounded bg-slate-100 text-primary font-bold">[KDA]</code> Kyoto ·{" "}
-          <code className="px-1.5 py-0.5 rounded bg-slate-100 text-primary font-bold">[PL]</code> Platform
-        </div>
-      </div>
-
-      {/* 4. MAIN DYNAMIC CALENDAR DISPLAY */}
-      <div className="grid grid-cols-1 xl:grid-cols-12 gap-6 items-start">
-        {/* Left Column (8 cols): Interactive Calendar Display */}
-        <div className="xl:col-span-8 bg-white rounded-2xl border border-slate-200/80 p-4 shadow-xs overflow-hidden">
-          {/* A. MONTH VIEW */}
-          {viewMode === "month" && (
-            <div>
-              {/* Day Names Header */}
-              <div className="grid grid-cols-7 gap-2 pb-2 mb-2 bg-slate-50 rounded-xl p-2 text-center text-xs font-bold text-slate-500">
-                <div>MON</div>
-                <div>TUE</div>
-                <div>WED</div>
-                <div>THU</div>
-                <div>FRI</div>
-                <div className="text-primary">SAT</div>
-                <div className="text-rose-600">SUN</div>
-              </div>
-
-              {/* 7-Column Month Grid */}
-              <div className="grid grid-cols-7 gap-2">
-                {/* Previous Month Spillover */}
-                {Array.from({ length: firstDayOfMonth }, (_, i) => {
-                  const dayNum = daysInPrevMonth - firstDayOfMonth + i + 1;
-                  return (
-                    <div
-                      key={`prev-spill-${i}`}
-                      onClick={() => handlePrev()}
-                      className="min-h-[105px] p-2 rounded-xl bg-slate-50/50 opacity-40 flex flex-col justify-between text-xs text-slate-400 cursor-pointer hover:opacity-70 transition-opacity"
-                    >
-                      <span>{dayNum}</span>
-                    </div>
-                  );
-                })}
-
-                {/* Days of Current Month */}
-                {Array.from({ length: daysInCurrentMonth }, (_, i) => i + 1).map((day) => {
-                  const dayDateStr = `${shortMonth} ${day}, ${currentYear}`;
-                  const dayEvents = filteredEvents.filter((e) => e.date === dayDateStr);
-                  const isSelected = selectedDay === day;
-                  const isTodayHighlight = currentYear === 2026 && currentMonth === 9 && day === 19;
-
-                  return (
-                    <div
-                      key={`day-${day}`}
-                      onClick={() => {
-                        setSelectedDay(day);
-                        showToast(`Selected ${shortMonth} ${day}, ${currentYear} (${dayEvents.length} event${dayEvents.length !== 1 ? "s" : ""})`);
-                      }}
-                      className={`min-h-[105px] p-2 rounded-xl border transition-all flex flex-col justify-between text-xs cursor-pointer ${
-                        isSelected
-                          ? "border-primary ring-2 ring-primary/20 bg-primary/5 shadow-xs"
-                          : isTodayHighlight
-                          ? "bg-slate-50 border-primary/40"
-                          : "border-slate-100 hover:border-slate-300 hover:bg-slate-50/50 bg-white"
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span
-                          className={`font-bold ${
-                            isSelected || isTodayHighlight ? "text-primary" : "text-slate-800"
-                          }`}
-                        >
-                          {day}
-                        </span>
-                        {isTodayHighlight && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-primary" title="Today" />
-                        )}
-                      </div>
-
-                      <div className="space-y-1 mt-1 overflow-hidden">
-                        {dayEvents.map((evt) => (
-                          <button
-                            key={evt.id}
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedEvent(evt);
-                            }}
-                            className={`w-full text-left p-1 rounded-lg text-[10px] leading-tight font-semibold truncate flex items-center gap-1 cursor-pointer transition-transform hover:scale-[1.02] ${
-                              evt.category === "infrastructure"
-                                ? "bg-rose-50 text-rose-700 border border-rose-200/60"
-                                : evt.category === "workshop"
-                                ? "bg-indigo-50 text-indigo-700 border border-indigo-200/60"
-                                : evt.category === "evaluation"
-                                ? "bg-amber-50 text-amber-800 border border-amber-200/60"
-                                : "bg-[#4B2EF5] text-white"
-                            }`}
-                          >
-                            <span className="font-mono text-[9px] opacity-80">[{evt.orgCode}]</span>
-                            <span className="truncate">{evt.title}</span>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  );
-                })}
-
-                {/* Next Month Spillover to complete grid */}
-                {Array.from(
-                  { length: (7 - ((firstDayOfMonth + daysInCurrentMonth) % 7)) % 7 },
-                  (_, i) => (
-                    <div
-                      key={`next-spill-${i}`}
-                      onClick={() => handleNext()}
-                      className="min-h-[105px] p-2 rounded-xl bg-slate-50/50 opacity-40 flex flex-col justify-between text-xs text-slate-400 cursor-pointer hover:opacity-70 transition-opacity"
-                    >
-                      <span>{i + 1}</span>
-                    </div>
-                  )
-                )}
-              </div>
+              <button
+                type="button"
+                onClick={() => setView("agenda")}
+                className={`px-3 h-10 text-xs font-bold transition-colors cursor-pointer ${
+                  view === "agenda" ? "bg-[#4B2EF5] text-white" : "text-slate-600 hover:text-slate-900"
+                }`}
+              >
+                Agenda
+              </button>
             </div>
-          )}
-
-          {/* B. WEEK VIEW */}
-          {viewMode === "week" && (
-            <div className="space-y-3">
-              <div className="grid grid-cols-7 gap-2 pb-2 bg-slate-50 rounded-xl p-2 text-center text-xs font-bold text-slate-500">
-                {weekDays.map((d) => (
-                  <div
-                    key={`week-head-${d}`}
-                    onClick={() => setSelectedDay(d)}
-                    className={`cursor-pointer p-1 rounded-lg transition-colors ${
-                      selectedDay === d ? "bg-primary text-white" : "hover:bg-slate-200/60"
-                    }`}
-                  >
-                    <div className="text-[10px] uppercase font-bold">{shortMonth}</div>
-                    <div className="text-base font-extrabold">{d}</div>
-                  </div>
-                ))}
-              </div>
-
-              {/* Time Slots */}
-              <div className="divide-y divide-slate-100 text-xs">
-                {["08:00 UTC", "10:00 UTC", "12:00 UTC", "14:00 UTC", "16:00 UTC"].map((slot) => (
-                  <div key={slot} className="py-3 flex items-start gap-4">
-                    <span className="w-16 font-mono text-[11px] text-slate-400 shrink-0">{slot}</span>
-                    <div className="flex-1 grid grid-cols-7 gap-2 min-h-[44px]">
-                      {weekDays.map((d) => {
-                        const dStr = `${shortMonth} ${d}, ${currentYear}`;
-                        const matching = filteredEvents.filter((e) => e.date === dStr);
-
-                        return (
-                          <div
-                            key={`slot-${slot}-${d}`}
-                            onClick={() => {
-                              setSelectedDay(d);
-                              setNewDate(dStr);
-                              setNewTime(slot);
-                              setIsNewEventModalOpen(true);
-                            }}
-                            className="p-1 rounded-lg border border-dashed border-slate-200 hover:border-primary/50 hover:bg-primary/5 transition-colors cursor-pointer min-h-[40px]"
-                          >
-                            {matching.map((evt) => (
-                              <div
-                                key={evt.id}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSelectedEvent(evt);
-                                }}
-                                className="p-1 rounded bg-[#4B2EF5] text-white text-[9px] font-bold truncate mb-1"
-                              >
-                                {evt.title}
-                              </div>
-                            ))}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* C. DAY VIEW */}
-          {viewMode === "day" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    {shortMonth} {selectedDay}, {currentYear}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    {selectedDayEvents.length} event{selectedDayEvents.length !== 1 ? "s" : ""} scheduled
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setNewDate(selectedDateStr);
-                    setIsNewEventModalOpen(true);
-                  }}
-                  className="px-3 py-1.5 rounded-xl bg-primary text-white text-xs font-bold cursor-pointer"
-                >
-                  + Add Event
-                </button>
-              </div>
-
-              {selectedDayEvents.length === 0 ? (
-                <div className="py-12 text-center text-slate-400 text-xs">
-                  <span className="material-symbols-outlined text-4xl text-slate-300 block mb-2">event_busy</span>
-                  <p>No platform events scheduled for this date.</p>
-                  <button
-                    onClick={() => {
-                      setNewDate(selectedDateStr);
-                      setIsNewEventModalOpen(true);
-                    }}
-                    className="mt-3 text-primary font-bold hover:underline"
-                  >
-                    Schedule an event on {selectedDateStr}
-                  </button>
-                </div>
-              ) : (
-                <div className="space-y-3">
-                  {selectedDayEvents.map((evt) => (
-                    <div
-                      key={evt.id}
-                      onClick={() => setSelectedEvent(evt)}
-                      className="p-4 rounded-xl border border-slate-200/80 hover:border-primary bg-slate-50/50 hover:bg-white transition-all cursor-pointer space-y-2"
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-sm text-slate-900">{evt.title}</span>
-                        <span className="font-mono text-xs bg-slate-200 px-2 py-0.5 rounded text-slate-700">{evt.time}</span>
-                      </div>
-                      <p className="text-xs text-slate-500">{evt.orgName} • {evt.categoryLabel}</p>
-                      <div className="flex items-center justify-between pt-2 border-t border-slate-100">
-                        <div className="flex -space-x-1.5">
-                          {evt.attendees.map((a, i) => (
-                            <div
-                              key={i}
-                              title={a.name}
-                              className="w-6 h-6 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center ring-2 ring-white"
-                            >
-                              {a.initials}
-                            </div>
-                          ))}
-                        </div>
-                        {evt.microsoftTeamsUrl && (
-                          <a
-                            href={evt.microsoftTeamsUrl}
-                            target="_blank"
-                            rel="noreferrer"
-                            onClick={(e) => e.stopPropagation()}
-                            className="text-xs font-bold text-primary hover:underline flex items-center gap-1"
-                          >
-                            <span className="material-symbols-outlined text-sm">video_call</span>
-                            Join Teams Session
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* Right Column (4 cols): Selected Day's Schedule & Quick Action Panel */}
-        <div className="xl:col-span-4 space-y-4">
-          <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h3 className="text-sm font-bold text-slate-900">
-                  {selectedDay === 19 && currentMonth === 9 && currentYear === 2026
-                    ? "Today's Schedule"
-                    : `Schedule (${shortMonth} ${selectedDay})`}
-                </h3>
-                <p className="text-[11px] text-slate-500">Live operational sync ledger</p>
-              </div>
-              <span className="text-[11px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full flex items-center gap-1">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                {selectedDayEvents.length} Event{selectedDayEvents.length !== 1 ? "s" : ""}
-              </span>
-            </div>
-
-            <div className="space-y-3">
-              {selectedDayEvents.length === 0 ? (
-                <div className="py-8 text-center text-slate-400 text-xs">
-                  <span className="material-symbols-outlined text-3xl text-slate-300 block mb-1">event_available</span>
-                  <p>No events scheduled for {selectedDateStr}.</p>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setNewDate(selectedDateStr);
-                      setIsNewEventModalOpen(true);
-                    }}
-                    className="mt-2 text-primary font-bold text-xs hover:underline cursor-pointer"
-                  >
-                    + Add Event for {shortMonth} {selectedDay}
-                  </button>
-                </div>
-              ) : (
-                selectedDayEvents.map((item) => (
-                  <div
-                    key={item.id}
-                    onClick={() => setSelectedEvent(item)}
-                    className="p-3 rounded-xl border border-slate-200/70 hover:border-primary/50 bg-slate-50/50 hover:bg-white transition-all cursor-pointer space-y-2 group"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <span className="text-xs font-bold text-slate-900 group-hover:text-primary transition-colors">
-                        {item.title}
-                      </span>
-                      <span className="text-[10px] font-mono bg-slate-200/70 text-slate-700 px-1.5 py-0.5 rounded shrink-0">
-                        {item.time}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-500 leading-snug">
-                      {item.orgName} • {item.categoryLabel}
-                    </p>
-
-                    <div className="flex items-center justify-between pt-1 border-t border-slate-100">
-                      <div className="flex -space-x-1.5 overflow-hidden">
-                        {item.attendees.map((a, i) => (
-                          <div
-                            key={i}
-                            title={a.name}
-                            className="w-5 h-5 rounded-full bg-primary text-white text-[9px] font-bold flex items-center justify-center ring-1 ring-white"
-                          >
-                            {a.initials}
-                          </div>
-                        ))}
-                      </div>
-
-                      {item.microsoftTeamsUrl && (
-                        <a
-                          href={item.microsoftTeamsUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          onClick={(e) => e.stopPropagation()}
-                          className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:underline"
-                        >
-                          <span className="material-symbols-outlined text-xs">video_call</span>
-                          <span>Open Teams</span>
-                        </a>
-                      )}
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-
-            {/* Quick Add Button on Panel */}
+            <button
+              type="button"
+              onClick={() => setAnchor((current) => new Date())}
+              className="h-10 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all cursor-pointer active:scale-95"
+            >
+              Today
+            </button>
             <button
               type="button"
               onClick={() => {
-                setNewDate(selectedDateStr);
-                setIsNewEventModalOpen(true);
+                void checkStatus();
+                void loadEvents();
               }}
-              className="mt-4 w-full py-2 rounded-xl bg-slate-50 hover:bg-slate-100 border border-dashed border-slate-200 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              className="h-10 w-10 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 flex items-center justify-center transition-all cursor-pointer active:scale-95"
+              aria-label="Refresh calendar"
             >
-              <span className="material-symbols-outlined text-base">add</span>
-              <span>Add Event for {shortMonth} {selectedDay}</span>
+              <span className="material-symbols-outlined text-lg">refresh</span>
             </button>
           </div>
-        </div>
-      </div>
+        }
+      />
 
-      {/* EVENT INSPECTION MODAL */}
-      <AnimatePresence>
-        {selectedEvent && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setSelectedEvent(null)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative bg-white w-full max-w-lg rounded-2xl p-6 shadow-xl border border-slate-200 space-y-4 text-xs z-10"
-            >
-              <div className="flex items-start justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-primary bg-primary/10 px-2 py-0.5 rounded-full">
-                    {selectedEvent.categoryLabel}
-                  </span>
-                  <h3 className="text-base font-bold text-slate-900 mt-2">{selectedEvent.title}</h3>
-                  <p className="text-xs text-slate-500">{selectedEvent.orgName} ({selectedEvent.orgCode})</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedEvent(null)}
-                  className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <span className="material-symbols-outlined text-base">close</span>
-                </button>
-              </div>
-
-              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/70 text-xs space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-500">Date & Time</span>
-                  <span className="font-semibold text-slate-800">{selectedEvent.date} at {selectedEvent.time}</span>
-                </div>
-                {selectedEvent.description && (
-                  <p className="text-slate-600 text-[11px] pt-1 border-t border-slate-200/50">
-                    {selectedEvent.description}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <h4 className="text-xs font-bold text-slate-700 mb-2">Synchronized Attendees</h4>
-                <div className="space-y-2">
-                  {selectedEvent.attendees.map((att, i) => (
-                    <div key={i} className="flex items-center gap-2.5 p-2 rounded-lg bg-slate-50 text-xs">
-                      <div className="w-6 h-6 rounded-full bg-primary text-white text-[10px] font-bold flex items-center justify-center">
-                        {att.initials}
-                      </div>
-                      <div>
-                        <div className="font-semibold text-slate-800">{att.name}</div>
-                        <div className="text-[10px] text-slate-400">{att.email}</div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              <div className="pt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
-                  {selectedEvent.microsoftTeamsUrl && (
-                    <a
-                      href={selectedEvent.microsoftTeamsUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="px-4 py-2 rounded-xl bg-primary text-white text-xs font-bold flex items-center gap-1.5 shadow-xs hover:bg-[#3d24c8] transition-colors"
-                    >
-                      <span className="material-symbols-outlined text-sm">video_call</span>
-                      <span>Launch Teams Session</span>
-                    </a>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteEvent(selectedEvent.id)}
-                    className="px-3 py-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold transition-colors cursor-pointer"
-                  >
-                    Delete
-                  </button>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setSelectedEvent(null)}
-                  className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-                >
-                  Close
-                </button>
-              </div>
-            </motion.div>
+      {/* CONNECTION STATE */}
+      {isChecking ? (
+        <div className="h-9 rounded-xl bg-slate-100 animate-pulse" />
+      ) : statusError ? (
+        <ErrorState title="Calendar check failed" message={statusError} onRetry={checkStatus} />
+      ) : status && !status.connected ? (
+        <UnavailableState
+          icon="calendar_month"
+          title={status.configured ? "Microsoft calendar is not reachable" : "Microsoft calendar not configured"}
+          message={status.message ?? "The Microsoft 365 calendar is unavailable."}
+          hint={calendarHint(status.code)}
+          action={
+            <PrimaryButton onClick={checkStatus} icon="refresh">
+              Re-check connection
+            </PrimaryButton>
+          }
+        />
+      ) : status ? (
+        <div className="flex flex-wrap items-center justify-between gap-3 p-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 text-xs">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex h-2.5 w-2.5">
+              <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+              <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            </span>
+            <span className="font-bold text-emerald-800">Microsoft 365 connected</span>
+            <span className="text-slate-400">•</span>
+            <span className="text-slate-600 font-mono">{status.mailbox}</span>
+            {status.calendar_name && (
+              <>
+                <span className="text-slate-400">•</span>
+                <span className="text-slate-600">{status.calendar_name}</span>
+              </>
+            )}
           </div>
-        )}
-      </AnimatePresence>
+          <span className="text-[11px] text-slate-500 font-medium">
+            {allEvents.length} event{allEvents.length === 1 ? "" : "s"} in view
+          </span>
+        </div>
+      ) : null}
 
-      {/* CREATE EVENT MODAL */}
-      <AnimatePresence>
-        {isNewEventModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-              onClick={() => setIsNewEventModalOpen(false)}
-              className="absolute inset-0 bg-slate-900/40 backdrop-blur-xs"
-            />
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              className="relative bg-white w-full max-w-lg rounded-2xl p-6 shadow-xl border border-slate-200 space-y-4 z-10"
-            >
-              <div className="flex items-center justify-between">
-                <h3 className="text-base font-bold text-slate-900">Schedule Platform Event</h3>
+      {/* EVENTS ERROR */}
+      {eventsError && canShowCalendar && (
+        <ErrorState
+          title="Could not load events"
+          message={eventsError}
+          onRetry={loadEvents}
+          retryLabel="Reload events"
+        />
+      )}
+
+      {/* CALENDAR */}
+      {isLoadingEvents && canShowCalendar ? (
+        <LoadingState label="Loading calendar events from Microsoft Graph…" />
+      ) : !canShowCalendar ? null : view === "month" ? (
+        <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
+          <SectionCard
+            className="lg:col-span-3"
+            icon="calendar_month"
+            title={`${MONTH[anchor.getMonth()]} ${anchor.getFullYear()}`}
+            subtitle={events ? `${range.start} → ${range.end}` : undefined}
+            action={
+              <div className="flex items-center gap-1">
                 <button
                   type="button"
-                  onClick={() => setIsNewEventModalOpen(false)}
-                  className="w-8 h-8 rounded-full hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                  onClick={() => setAnchor((current) => addMonths(current, -1))}
+                  className="w-8 h-8 rounded-lg text-slate-500 hover:bg-slate-100 flex items-center justify-center cursor-pointer transition-colors"
+                  aria-label="Previous month"
                 >
-                  <span className="material-symbols-outlined text-base">close</span>
+                  <span className="material-symbols-outlined text-lg">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setAnchor((current) => addMonths(current, 1))}
+                  className="w-8 h-8 rounded-lg text-slate-500 hover:bg-slate-100 flex items-center justify-center cursor-pointer transition-colors"
+                  aria-label="Next month"
+                >
+                  <span className="material-symbols-outlined text-lg">chevron_right</span>
                 </button>
               </div>
+            }
+          >
+            <MonthGrid
+              anchor={anchor}
+              today={today}
+              eventsByDay={eventsByDay}
+              onSelectDay={(day) => setSelectedDay(toIsoDate(day))}
+              selectedDay={selectedDay}
+            />
+            <div className="flex flex-wrap items-center gap-3 mt-4 pt-3 border-t border-slate-100">
+              {[
+                { label: "Busy", color: "bg-[#4B2EF5]" },
+                { label: "Tentative", color: "bg-amber-400" },
+                { label: "Out of office", color: "bg-rose-400" },
+                { label: "Free", color: "bg-slate-300" },
+              ].map((legend) => (
+                <span key={legend.label} className="flex items-center gap-1.5 text-[11px] text-slate-500">
+                  <span className={`w-2.5 h-2.5 rounded-full ${legend.color}`} />
+                  {legend.label}
+                </span>
+              ))}
+            </div>
+          </SectionCard>
 
-              <form onSubmit={handleCreateEvent} className="space-y-4 text-xs">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Event Title</label>
-                  <input
-                    type="text"
-                    required
-                    placeholder="e.g. Q4 Regional Faculty Assessment"
-                    value={newTitle}
-                    onChange={(e) => setNewTitle(e.target.value)}
-                    className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:outline-none"
+          <div className="lg:col-span-2">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={selectedDay ?? "agenda"}
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                transition={{ duration: 0.2 }}
+              >
+                <SectionCard
+                  icon="event"
+                  title={selectedDay ?? "Upcoming"}
+                  subtitle={
+                    selectedDay
+                      ? `${selectedDayEvents.length} event${selectedDayEvents.length === 1 ? "" : "s"}`
+                      : "Next scheduled items in the visible window"
+                  }
+                >
+                  <EventList
+                    events={selectedDay ? selectedDayEvents : allEvents.slice(0, 12)}
+                    emptyLabel={
+                      selectedDay
+                        ? "Nothing scheduled on this day."
+                        : "No events in the visible window."
+                    }
                   />
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Organisation Scope</label>
-                    <select
-                      value={newOrg}
-                      onChange={(e) => setNewOrg(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:outline-none cursor-pointer"
-                    >
-                      {MOCK_ORGANISATIONS.map((org) => (
-                        <option key={org.id} value={org.name}>
-                          {org.name} ({org.code})
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Event Type</label>
-                    <select
-                      value={newCategory}
-                      onChange={(e) => setNewCategory(e.target.value as "sync" | "workshop" | "evaluation" | "infrastructure")}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:outline-none cursor-pointer"
-                    >
-                      <option value="sync">Superuser Direct Sync</option>
-                      <option value="workshop">Cohort Workshop</option>
-                      <option value="evaluation">Evaluation Deadline</option>
-                      <option value="infrastructure">Infrastructure</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Date</label>
-                    <input
-                      type="text"
-                      value={newDate}
-                      onChange={(e) => setNewDate(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Time (UTC)</label>
-                    <input
-                      type="text"
-                      value={newTime}
-                      onChange={(e) => setNewTime(e.target.value)}
-                      className="w-full h-10 px-3 rounded-xl border border-slate-200 text-xs font-medium focus:ring-2 focus:ring-primary/20 focus:outline-none"
-                    />
-                  </div>
-                </div>
-
-                <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsNewEventModalOpen(false)}
-                    className="px-4 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold cursor-pointer"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    type="submit"
-                    className="px-4 py-2 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white font-bold shadow-xs cursor-pointer"
-                  >
-                    Create &amp; Sync Event
-                  </button>
-                </div>
-              </form>
-            </motion.div>
+                </SectionCard>
+              </motion.div>
+            </AnimatePresence>
           </div>
-        )}
-      </AnimatePresence>
-
-      {/* FLOATING TOAST NOTIFICATION */}
-      <AnimatePresence>
-        {toastMessage && (
-          <motion.div
-            initial={{ opacity: 0, y: 20, scale: 0.95 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 15, scale: 0.95 }}
-            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-4 py-2.5 rounded-xl shadow-2xl flex items-center gap-2.5 text-xs border border-slate-700"
-          >
-            <span className="material-symbols-outlined text-emerald-400 text-[18px]">calendar_month</span>
-            <span>{toastMessage}</span>
-            <button
-              type="button"
-              onClick={() => setToastMessage(null)}
-              className="text-slate-400 hover:text-white ml-1 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-[16px]">close</span>
-            </button>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        </div>
+      ) : (
+        <SectionCard
+          icon="list"
+          title="Agenda"
+          subtitle={`${range.start} → ${range.end}`}
+        >
+          {allEvents.length === 0 ? (
+            <EmptyState
+              icon="event_busy"
+              title="No events in this window"
+              description="There is nothing scheduled on the connected Microsoft calendar for the selected months."
+            />
+          ) : (
+            <EventList events={allEvents} emptyLabel="" />
+          )}
+        </SectionCard>
+      )}
     </motion.div>
   );
 }

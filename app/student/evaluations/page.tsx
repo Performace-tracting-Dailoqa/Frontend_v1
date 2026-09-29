@@ -15,16 +15,9 @@ interface RubricItem {
 }
 
 export default function StudentEvaluationsPage() {
-  const [rubrics, setRubrics] = useState<RubricItem[]>([
-    { id: "r1", name: "Technical Implementation & Code Cleanliness", desc: "TypeScript precision, Next.js architecture, and clean patterns.", score: 5 },
-    { id: "r2", name: "System Design & Cloud Best Practices", desc: "Modular microservices, Docker compliance, and API contracts.", score: 4 },
-    { id: "r3", name: "Cross-Cultural Collaboration & Communication", desc: "Active standup participation and proactive sprint syncs.", score: 5 },
-    { id: "r4", name: "Japanese Linguistic Application", desc: "Consistent usage of technical vocabulary and polite Keigo.", score: 4 },
-  ]);
+  const [rubrics, setRubrics] = useState<RubricItem[]>([]);
 
-  const [reflectionText, setReflectionText] = useState(
-    "Over this quarter, I successfully spearheaded our Next.js App Router refactor and built out the interactive Japanese Kumo UI system. For the upcoming cycle, I plan to focus deeper on advanced SQL index optimization and Sonkeigo/Kenjougo business email communication."
-  );
+  const [reflectionText, setReflectionText] = useState("");
 
   const [submitted, setSubmitted] = useState(false);
 
@@ -85,47 +78,17 @@ export default function StudentEvaluationsPage() {
       {/* ========================================================= */}
       {/* EVALUATION CYCLE STATUS BAR                               */}
       {/* ========================================================= */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-        <h2 className="text-headline-sm font-bold text-slate-900 mb-3">Q3 2026 Appraisal Lifecycle</h2>
-        
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <motion.div
-            whileHover={{ y: -2 }}
-            className="p-4 rounded-xl bg-slate-50/80 border border-slate-200 shadow-2xs"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold text-emerald-700 uppercase">Stage 1 • Completed</span>
-              <span className="material-symbols-outlined text-emerald-600 text-lg">check_circle</span>
-            </div>
-            <h4 className="text-body-md font-bold text-slate-900">Mentor Technical Review</h4>
-            <p className="text-xs text-slate-500 mt-0.5">Approved by Dr. Tanaka (4.9 / 5.0)</p>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -2 }}
-            className="p-4 rounded-xl bg-slate-50/80 border border-slate-200 shadow-2xs"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold text-emerald-700 uppercase">Stage 2 • Completed</span>
-              <span className="material-symbols-outlined text-emerald-600 text-lg">check_circle</span>
-            </div>
-            <h4 className="text-body-md font-bold text-slate-900">Linguistic Oral Evaluation</h4>
-            <p className="text-xs text-slate-500 mt-0.5">Approved by Yuki Sato Sensei (4.8 / 5.0)</p>
-          </motion.div>
-
-          <motion.div
-            whileHover={{ y: -2 }}
-            className="p-4 rounded-xl bg-white border-2 border-primary shadow-xs"
-          >
-            <div className="flex items-center justify-between mb-1">
-              <span className="text-xs font-mono font-bold text-primary uppercase">Stage 3 • Action Required</span>
-              <span className="material-symbols-outlined text-primary text-lg">edit_note</span>
-            </div>
-            <h4 className="text-body-md font-bold text-slate-900">Trainee Self-Evaluation</h4>
-            <p className="text-xs text-slate-500 mt-0.5">
-              {submitted ? "Submitted • Pending Dean Sign-Off" : "Due Friday, Sep 25, 2026"}
-            </p>
-          </motion.div>
+      <div className="bg-white p-6 rounded-2xl border border-dashed border-outline-variant/60 shadow-xs text-center flex flex-col justify-center items-center">
+        <div className="w-16 h-16 rounded-2xl bg-indigo-500/10 text-indigo-600 flex items-center justify-center mx-auto mb-4">
+          <span className="material-symbols-outlined text-3xl">api</span>
+        </div>
+        <h2 className="text-headline-sm font-bold text-slate-900 mb-2">Appraisal Lifecycle</h2>
+        <p className="text-body-sm text-slate-500 max-w-sm mb-4">
+          Backend Developer: Integrate the student's evaluation stages and mentor approval status here.
+        </p>
+        <div className="inline-flex flex-col gap-2 text-left bg-slate-50 p-4 rounded-lg border border-slate-200">
+          <code className="text-xs text-slate-600 font-mono">GET /api/v1/student/evaluations/stages</code>
+          <span className="text-[11px] text-slate-500 mt-1 block">Expected data: Stages with completion status and mentor notes.</span>
         </div>
       </div>
 

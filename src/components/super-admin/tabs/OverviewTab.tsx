@@ -2,27 +2,96 @@
 
 import React from "react";
 import { motion } from "framer-motion";
-import { MOCK_ORGANISATIONS, MOCK_AUDIT_LOGS } from "../mockData";
+import { useAsyncData } from "@/hooks/useAsyncData";
+import {
+  fetchSuperuserOverview,
+  isPermissionError,
+  SuperuserOverview,
+} from "@/services/insightsService";
 import { SystemTelemetryData } from "@/services/adminService";
-
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  PageIntro,
+  Pill,
+  ProgressBar,
+  SectionCard,
+  StatCard,
+  UnavailableState,
+} from "../SuperAdminUi";
 import { SuperAdminTab } from "../types";
 
 interface OverviewTabProps {
   telemetry: SystemTelemetryData | null;
-  totalUsersCount: number;
   onNavigateTab: (tab: SuperAdminTab) => void;
-  onSimulate: (role: string, user: string, org: string) => void;
+  onRefresh: () => void;
 }
 
-export default function OverviewTab({
-  telemetry,
-  totalUsersCount,
-  onNavigateTab,
-  onSimulate,
-}: OverviewTabProps) {
-  const latencyMs = telemetry?.database_latency_ms ?? 14;
-  const dbConnected = telemetry?.database_connected ?? true;
-  const activeCount = telemetry?.active_users ?? totalUsersCount;
+function formatScore(value: number | null | undefined): string {
+  return typeof value === "number" ? `${value.toFixed(1)}%` : "—";
+}
+
+function formatTimestamp(value: string | null | undefined): string {
+  if (!value) return "—";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? value : parsed.toLocaleString();
+}
+
+function severityTone(status: string | null | undefined): "emerald" | "amber" | "rose" | "slate" {
+  const normalized = (status || "").toLowerCase();
+  if (["success", "completed", "ok", "allowed"].includes(normalized)) return "emerald";
+  if (["failed", "denied", "error", "blocked"].includes(normalized)) return "rose";
+  if (["warning", "pending"].includes(normalized)) return "amber";
+  return "slate";
+}
+
+export default function OverviewTab({ telemetry, onNavigateTab, onRefresh }: OverviewTabProps) {
+  const {
+    data: overview,
+    isInitialLoading,
+    error,
+    reload,
+  } = useAsyncData<SuperuserOverview>(() => fetchSuperuserOverview(), []);
+
+  if (isInitialLoading) {
+    return <LoadingState label="Assembling system-wide insights from the database…" />;
+  }
+
+  if (error) {
+    return isPermissionError(error) ? (
+      <UnavailableState
+        icon="lock"
+        title="Super Admin access required"
+        message={error}
+        hint="The /api/v1/superuser/* endpoints are restricted to the Super Admin role."
+      />
+    ) : (
+      <ErrorState title="Could not load the overview" message={error} onRetry={reload} />
+    );
+  }
+
+  if (!overview) {
+    return (
+      <EmptyState
+        title="No overview data"
+        description="The backend returned an empty response. Refresh to try again."
+        action={
+          <button
+            type="button"
+            onClick={reload}
+            className="px-4 py-2 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white text-xs font-bold shadow-xs cursor-pointer active:scale-95 flex items-center gap-1.5"
+          >
+            <span className="material-symbols-outlined text-base">refresh</span>
+            <span>Refresh</span>
+          </button>
+        }
+      />
+    );
+  }
+
+  const dbOnline = telemetry?.database_connected ?? false;
+  const latency = telemetry?.database_latency_ms ?? null;
 
   return (
     <motion.div
@@ -31,422 +100,290 @@ export default function OverviewTab({
       transition={{ duration: 0.25, ease: "easeOut" }}
       className="space-y-6"
     >
-      {/* LIVE BACKEND STATUS BANNER */}
-      <div className="flex items-center justify-between p-3 px-4 rounded-xl bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border border-emerald-500/20 text-xs">
+      <PageIntro
+        icon="dashboard"
+        title="System Overview"
+        description={`Live counters read from the PMS database at ${formatTimestamp(overview.generated_at)}`}
+        action={
+          <button
+            type="button"
+            onClick={() => {
+              onRefresh();
+              reload();
+            }}
+            className="h-10 px-4 rounded-xl bg-[#4B2EF5] hover:bg-[#3d24c8] text-white text-xs font-bold flex items-center gap-1.5 transition-all shadow-xs cursor-pointer active:scale-95"
+          >
+            <span className="material-symbols-outlined text-lg">refresh</span>
+            <span>Refresh</span>
+          </button>
+        }
+      />
+
+      {/* CONNECTION BANNER */}
+      <div
+        className={`flex flex-wrap items-center justify-between gap-3 p-3 px-4 rounded-xl border text-xs ${
+          dbOnline
+            ? "bg-gradient-to-r from-emerald-500/10 via-primary/5 to-transparent border-emerald-500/20"
+            : "bg-rose-50 border-rose-200"
+        }`}
+      >
         <div className="flex items-center gap-2.5">
           <span className="relative flex h-2.5 w-2.5">
-            <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-            <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
+            <span
+              className={`animate-ping absolute inline-flex h-full w-full rounded-full opacity-75 ${
+                dbOnline ? "bg-emerald-400" : "bg-rose-400"
+              }`}
+            />
+            <span
+              className={`relative inline-flex rounded-full h-2.5 w-2.5 ${
+                dbOnline ? "bg-emerald-500" : "bg-rose-500"
+              }`}
+            />
           </span>
-          <span className="font-bold text-emerald-800 dark:text-emerald-300">
-            Live Backend Synchronization Active
+          <span className={dbOnline ? "font-bold text-emerald-800" : "font-bold text-rose-800"}>
+            {dbOnline ? "Backend connected" : "Backend unreachable"}
           </span>
           <span className="text-slate-400">•</span>
-          <span className="text-slate-600 dark:text-slate-300">
-            Supabase PostgreSQL {dbConnected ? "Online" : "Connecting"} (Latency:{" "}
-            <span className="font-mono font-bold text-emerald-700">{latencyMs} ms</span>)
+          <span className="text-slate-600">
+            Supabase PostgreSQL {dbOnline ? "Online" : "Unreachable"}
+            {latency !== null ? ` · ${latency} ms round trip` : ""}
           </span>
         </div>
-        <span className="hidden sm:inline text-[11px] text-slate-500 font-medium">
-          FastAPI Engine v0.1.0 • Connected
+        <span className="text-[11px] text-slate-500 font-medium">
+          Snapshot {formatTimestamp(overview.generated_at)}
         </span>
       </div>
 
-      {/* ROW 1: SIX PLATFORM-WIDE KPI CARDS WITH STAGGERED SPRING ANIMATION */}
+      {/* KPI GRID */}
       <motion.div
-        variants={{
-          hidden: { opacity: 0 },
-          show: {
-            opacity: 1,
-            transition: {
-              staggerChildren: 0.05,
-              delayChildren: 0.02,
-            },
-          },
-        }}
+        variants={{ hidden: { opacity: 0 }, show: { opacity: 1, transition: { staggerChildren: 0.05 } } }}
         initial="hidden"
         animate="show"
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4"
       >
-        {/* KPI 1 */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Organisations</span>
-            <span className="material-symbols-outlined text-lg text-primary">
-              corporate_fare
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-900">4 Active</div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-              +1 Trial pending
-            </p>
-          </div>
+          <StatCard
+            label="Identities"
+            value={overview.users.total}
+            hint={`${overview.users.active} active`}
+            icon="badge"
+            tone="primary"
+            onClick={() => onNavigateTab("users")}
+          />
         </motion.div>
 
-        {/* KPI 2 (Dynamic with Real Users) */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          onClick={() => onNavigateTab("users")}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(13, 148, 136, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Total Identities</span>
-            <span className="material-symbols-outlined text-lg text-teal-600">
-              group
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-900">
-              {totalUsersCount} Users
-            </div>
-            <p className="text-[11px] text-emerald-600 font-medium mt-0.5">
-              {activeCount} Active in Database
-            </p>
-          </div>
+          <StatCard
+            label="Teams"
+            value={overview.teams.total}
+            hint={`${overview.teams.active} running`}
+            icon="groups"
+            tone="indigo"
+            onClick={() => onNavigateTab("teams")}
+          />
         </motion.div>
 
-        {/* KPI 3 */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          onClick={() => onNavigateTab("progress")}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(79, 70, 229, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Evaluations</span>
-            <span className="material-symbols-outlined text-lg text-indigo-600">
-              assignment_turned_in
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-900">9,840</div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-              +14% this month
-            </p>
-          </div>
+          <StatCard
+            label="Learners & Interns"
+            value={overview.teams.learners}
+            hint={
+              overview.teams.unassigned_learners > 0
+                ? `${overview.teams.unassigned_learners} unassigned`
+                : "All assigned"
+            }
+            hintTone={overview.teams.unassigned_learners > 0 ? "warning" : "positive"}
+            icon="school"
+            tone="teal"
+            onClick={() => onNavigateTab("users")}
+          />
         </motion.div>
 
-        {/* KPI 4 */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(16, 185, 129, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Platform SLA</span>
-            <span className="material-symbols-outlined text-lg text-emerald-600">
-              verified
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-emerald-600">
-              {telemetry?.system_uptime || "99.98%"}
-            </div>
-            <p className="text-[11px] text-slate-500 font-medium mt-0.5">
-              Zero downtime detected
-            </p>
-          </div>
+          <StatCard
+            label="Task Completion"
+            value={`${overview.work.completion_percentage}%`}
+            hint={`${overview.work.tasks_completed} of ${overview.work.tasks} tasks`}
+            hintTone={overview.work.completion_percentage >= 50 ? "positive" : "warning"}
+            icon="task_alt"
+            tone="emerald"
+            onClick={() => onNavigateTab("progress")}
+          />
         </motion.div>
 
-        {/* KPI 5 */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(217, 119, 6, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Bastion Nodes</span>
-            <span className="material-symbols-outlined text-lg text-amber-600">
-              dns
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-900">
-              {telemetry?.bastion_nodes || 4}/4 Nodes
-            </div>
-            <p className="text-[11px] text-emerald-600 font-semibold mt-0.5">
-              Tokyo &amp; Edge Sync
-            </p>
-          </div>
+          <StatCard
+            label="Evaluations"
+            value={overview.evaluations.total}
+            hint={`avg ${formatScore(overview.evaluations.average_percentage)}`}
+            icon="assignment_turned_in"
+            tone="violet"
+            onClick={() => onNavigateTab("progress")}
+          />
         </motion.div>
 
-        {/* KPI 6 */}
         <motion.div
-          variants={{
-            hidden: { opacity: 0, y: 14, scale: 0.96 },
-            show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 350, damping: 25 } },
-          }}
-          whileHover={{ y: -4, scale: 1.02, boxShadow: "0 10px 25px -5px rgba(124, 58, 237, 0.12)" }}
-          className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col justify-between cursor-pointer transition-all"
+          variants={{ hidden: { opacity: 0, y: 14 }, show: { opacity: 1, y: 0, transition: { type: "spring", stiffness: 350, damping: 25 } } }}
         >
-          <div className="flex items-center justify-between text-slate-500 mb-2">
-            <span className="text-xs font-semibold">Audit Ledger</span>
-            <span className="material-symbols-outlined text-lg text-violet-600">
-              lock
-            </span>
-          </div>
-          <div>
-            <div className="text-2xl font-bold text-slate-900">Valid</div>
-            <p className="text-[11px] text-violet-600 font-semibold font-mono mt-0.5">
-              #ledger-9821 intact
-            </p>
-          </div>
+          <StatCard
+            label="Overdue Tasks"
+            value={overview.work.tasks_overdue}
+            hint={overview.work.tasks_overdue > 0 ? "Needs attention" : "None overdue"}
+            hintTone={overview.work.tasks_overdue > 0 ? "critical" : "positive"}
+            icon="running_with_errors"
+            tone={overview.work.tasks_overdue > 0 ? "rose" : "slate"}
+            onClick={() => onNavigateTab("progress")}
+          />
         </motion.div>
       </motion.div>
 
-      {/* ROW 2: TENANTS DIRECTORY PREVIEW & LIVE TELEMETRY */}
+      {/* ROLES + WORKLOAD */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Left 2 Cols: Tenants Directory Table */}
-        <div className="lg:col-span-2 bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-900">
-                Multi-Tenant Organisations
-              </h2>
-              <p className="text-xs text-slate-500">
-                Active tenant roster and quota allocations
-              </p>
-            </div>
+        <SectionCard
+          title="People by Role"
+          subtitle={`${overview.users.inactive} account${overview.users.inactive === 1 ? "" : "s"} currently deactivated`}
+          icon="manage_accounts"
+          className="lg:col-span-1"
+          action={
             <button
               type="button"
-              onClick={() => onNavigateTab("teams")}
+              onClick={() => onNavigateTab("users")}
               className="text-xs font-bold text-[#4B2EF5] hover:underline flex items-center gap-1 cursor-pointer"
             >
-              <span>View All Teams</span>
+              <span>Manage</span>
               <span className="material-symbols-outlined text-sm">arrow_forward</span>
             </button>
+          }
+        >
+          {overview.users.by_role.length === 0 ? (
+            <p className="text-xs text-slate-400 py-6 text-center">No roles are defined in the database.</p>
+          ) : (
+            <ul className="space-y-2.5">
+              {overview.users.by_role.map((role) => {
+                const share =
+                  overview.users.total > 0 ? (role.count / overview.users.total) * 100 : 0;
+                return (
+                  <li key={role.id ?? role.name}>
+                    <div className="flex items-center justify-between text-xs mb-1">
+                      <span className="font-semibold text-slate-700 truncate pr-2">{role.name}</span>
+                      <span className="font-bold text-slate-900 font-mono shrink-0">{role.count}</span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                      <motion.div
+                        initial={{ width: 0 }}
+                        animate={{ width: `${share}%` }}
+                        transition={{ duration: 0.6, ease: "easeOut" }}
+                        className="h-full bg-primary rounded-full"
+                      />
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </SectionCard>
+
+        <SectionCard
+          title="Workflow Workload"
+          subtitle="Tasks across every batch in the platform"
+          icon="account_tree"
+          className="lg:col-span-2"
+        >
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+            {[
+              { label: "Workflows", value: overview.work.workflows, tone: "text-slate-900" },
+              { label: "Tasks", value: overview.work.tasks, tone: "text-slate-900" },
+              { label: "Completed", value: overview.work.tasks_completed, tone: "text-emerald-600" },
+              { label: "Overdue", value: overview.work.tasks_overdue, tone: "text-rose-600" },
+            ].map((item) => (
+              <div key={item.label} className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
+                <p className="text-[11px] font-semibold text-slate-500">{item.label}</p>
+                <p className={`text-xl font-bold mt-0.5 ${item.tone}`}>{item.value}</p>
+              </div>
+            ))}
           </div>
-
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs">
-              <thead>
-                <tr className="border-b border-slate-200/80 text-slate-400 font-bold uppercase tracking-wider">
-                  <th className="pb-3 font-semibold">Organisation</th>
-                  <th className="pb-3 font-semibold">Domain</th>
-                  <th className="pb-3 font-semibold">Plan</th>
-                  <th className="pb-3 font-semibold">Seat Utilization</th>
-                  <th className="pb-3 font-semibold">Status</th>
-                  <th className="pb-3 text-right font-semibold">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {MOCK_ORGANISATIONS.map((org) => {
-                  const pct = Math.round((org.totalUsers / org.maxUsers) * 100);
-                  return (
-                    <tr
-                      key={org.id}
-                      className="hover:bg-slate-50/70 transition-colors"
-                    >
-                      <td className="py-3 font-medium text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <span className="w-6 h-6 rounded bg-primary/10 text-primary font-bold text-[10px] flex items-center justify-center">
-                            {org.code}
-                          </span>
-                          <span className="font-semibold">{org.name}</span>
-                        </div>
-                      </td>
-                      <td className="py-3 text-slate-500 font-mono text-[11px]">
-                        {org.domain}
-                      </td>
-                      <td className="py-3">
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-slate-100 text-slate-700">
-                          {org.plan}
-                        </span>
-                      </td>
-                      <td className="py-3">
-                        <div className="w-28 space-y-1">
-                          <div className="flex justify-between text-[10px] text-slate-500">
-                            <span>{org.totalUsers} / {org.maxUsers}</span>
-                            <span>{pct}%</span>
-                          </div>
-                          <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                              className={`h-full rounded-full transition-all duration-500 ${
-                                pct > 90 ? "bg-amber-500" : "bg-primary"
-                              }`}
-                              style={{ width: `${pct}%` }}
-                            />
-                          </div>
-                        </div>
-                      </td>
-                      <td className="py-3">
-                        <span
-                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            org.status === "Active"
-                              ? "bg-emerald-50 text-emerald-700"
-                              : org.status === "Trial"
-                              ? "bg-amber-50 text-amber-700"
-                              : "bg-rose-50 text-rose-700"
-                          }`}
-                        >
-                          <span
-                            className={`w-1.5 h-1.5 rounded-full ${
-                              org.status === "Active"
-                                ? "bg-emerald-500"
-                                : org.status === "Trial"
-                                ? "bg-amber-500"
-                                : "bg-rose-500"
-                            }`}
-                          />
-                          {org.status}
-                        </span>
-                      </td>
-                      <td className="py-3 text-right">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            onSimulate("Tenant Admin", org.adminName, org.name)
-                          }
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-[#4B2EF5] hover:text-white text-slate-700 text-[11px] font-medium transition-colors cursor-pointer"
-                        >
-                          View As
-                        </button>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <ProgressBar
+            value={overview.work.completion_percentage}
+            label="Overall task completion"
+            className="mb-4"
+          />
+          <div className="flex flex-wrap gap-2">
+            <Pill tone="primary">
+              <span className="material-symbols-outlined text-[13px]">mark_email_unread</span>
+              {overview.notifications.unread} unread notification
+              {overview.notifications.unread === 1 ? "" : "s"}
+            </Pill>
+            <Pill tone="violet">
+              <span className="material-symbols-outlined text-[13px]">verified</span>
+              {overview.evaluations.finalized} finalized evaluation
+              {overview.evaluations.finalized === 1 ? "" : "s"}
+            </Pill>
+            <Pill tone="slate">
+              <span className="material-symbols-outlined text-[13px]">grading</span>
+              {overview.evaluations.workflow} workflow · {overview.evaluations.general} general
+            </Pill>
           </div>
-        </div>
-
-        {/* Right Col: Live System Telemetry */}
-        <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">
-              Live DB Telemetry
-            </h2>
-            <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-semibold">
-              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              Connected
-            </span>
-          </div>
-
-          <div className="space-y-3">
-            {/* Metric 1 */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                <span>Supabase PostgreSQL Latency</span>
-                <span className="text-emerald-600 font-bold font-mono">{latencyMs} ms</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Measured against public.users table
-              </p>
-              <div className="h-1.5 w-full bg-slate-200 rounded-full mt-2 overflow-hidden">
-                <div
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
-                  style={{ width: `${Math.min(100, Math.max(10, 100 - latencyMs / 5))}%` }}
-                />
-              </div>
-            </div>
-
-            {/* Metric 2 */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                <span>Database User Records</span>
-                <span className="text-primary font-bold">{totalUsersCount} Total</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Students: {telemetry?.students_count ?? 1} • Teachers: {telemetry?.teachers_count ?? 1}
-              </p>
-            </div>
-
-            {/* Metric 3 */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                <span>Redis Cache Hit Rate</span>
-                <span className="text-emerald-600 font-bold">98.4%</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Session TTL cached, zero eviction drops
-              </p>
-            </div>
-
-            {/* Metric 4 */}
-            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200/60">
-              <div className="flex items-center justify-between text-xs font-semibold text-slate-800">
-                <span>System Health &amp; SLA</span>
-                <span className="text-slate-900 font-bold">{telemetry?.system_uptime || "99.98%"}</span>
-              </div>
-              <p className="text-[11px] text-slate-500 mt-1">
-                Bastion Nodes: {telemetry?.bastion_nodes || 4} Online
-              </p>
-            </div>
-          </div>
-        </div>
+        </SectionCard>
       </div>
 
-      {/* ROW 3: CROSS-TENANT AUDIT STREAM PREVIEW */}
-      <div className="bg-white rounded-2xl border border-slate-200/80 p-5 shadow-xs space-y-4">
-        <div className="flex items-center justify-between">
-          <div>
-            <h2 className="text-base font-bold text-slate-900">
-              Cross-Tenant Audit Activity Stream
-            </h2>
-            <p className="text-xs text-slate-500">
-              Live immutable events captured across all tenant boundaries
-            </p>
-          </div>
+      {/* AUDIT STREAM */}
+      <SectionCard
+        title="Recent Audit Activity"
+        subtitle="Latest entries from the immutable audit_logs table"
+        icon="history"
+        action={
           <button
             type="button"
-            onClick={() => onNavigateTab("users")}
+            onClick={() => onNavigateTab("progress")}
             className="text-xs font-bold text-[#4B2EF5] hover:underline flex items-center gap-1 cursor-pointer"
           >
-            <span>Open People Directory</span>
+            <span>Team progress</span>
             <span className="material-symbols-outlined text-sm">arrow_forward</span>
           </button>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-          {MOCK_AUDIT_LOGS.map((item) => (
-            <motion.div
-              key={item.id}
-              whileHover={{ y: -2 }}
-              className={`p-3.5 rounded-xl border transition-all ${
-                item.severity === "critical"
-                  ? "bg-rose-50/60 border-rose-200 text-rose-950"
-                  : item.severity === "warning"
-                  ? "bg-amber-50/60 border-amber-200 text-amber-950"
-                  : "bg-slate-50/70 border-slate-200/80 text-slate-900"
-              }`}
-            >
-              <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
-                <span className="font-mono font-bold text-primary">{item.hash}</span>
-                <span>{item.relativeTime}</span>
-              </div>
-              <h3 className="text-xs font-bold truncate">{item.actionTitle}</h3>
-              <p className="text-[11px] text-slate-600 line-clamp-2 mt-1">
-                {item.actionDetails}
-              </p>
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-slate-200/60 text-[10px] text-slate-500">
-                <span className="font-medium truncate">{item.orgName}</span>
-                <span className="font-semibold">{item.actorName}</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-      </div>
+        }
+      >
+        {overview.activity.length === 0 ? (
+          <EmptyState
+            icon="history_toggle_off"
+            title="No audit entries yet"
+            description="Actions performed in the PMS will be recorded here automatically."
+          />
+        ) : (
+          <ul className="divide-y divide-slate-100">
+            {overview.activity.map((entry) => (
+              <li key={entry.id} className="py-2.5 flex flex-wrap items-center gap-3">
+                <span className="w-8 h-8 rounded-lg bg-slate-100 text-slate-500 flex items-center justify-center shrink-0">
+                  <span className="material-symbols-outlined text-base">bolt</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="text-xs font-bold text-slate-900 truncate">
+                    {entry.actor_name}
+                    <span className="font-medium text-slate-500"> · {entry.action}</span>
+                  </p>
+                  <p className="text-[11px] text-slate-400 truncate">
+                    {entry.entity_type ? `${entry.entity_type} · ` : ""}
+                    {entry.ip_address ?? "no IP recorded"}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Pill tone={severityTone(entry.status)}>{entry.status ?? "logged"}</Pill>
+                  <span className="text-[11px] text-slate-400">{entry.relative_time}</span>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </SectionCard>
     </motion.div>
   );
 }

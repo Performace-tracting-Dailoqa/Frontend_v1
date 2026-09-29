@@ -28,6 +28,10 @@ export interface UserDetail {
   name?: string | null;
   is_active: boolean;
   must_change_password: boolean;
+  /** Sign-in provider bound to this identity: "password" or "microsoft". */
+  auth_provider?: string | null;
+  created_at?: string | null;
+  last_updated_at?: string | null;
   role: UserRole;
   profile?: UserProfile | null;
   scope?: UserScope | null;
@@ -136,7 +140,7 @@ export function isUserLoggedIn(): boolean {
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
-  window.location.assign("/api/auth/microsoft");
+  window.location.href = "/api/auth/microsoft";
 }
 
 export function getLoginErrorMessage(code?: string | null): string {

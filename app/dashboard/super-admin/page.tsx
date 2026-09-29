@@ -23,34 +23,32 @@ import CalendarTab from "@/components/super-admin/tabs/CalendarTab";
 import AddPersonTab from "@/components/super-admin/tabs/AddPersonTab";
 import ProfileSettingsTab from "@/components/super-admin/tabs/ProfileSettingsTab";
 
+import { prefetchDashboardData } from "@/services/dataCache";
+import { apiFetch, invalidateCache } from "@/services/apiClient";
+
 function SuperAdminDashboardContent() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const pathname = usePathname();
 
   const tabParam = searchParams.get("tab");
-  const [activeTab, setActiveTab] = useState<SuperAdminTab>(
-    isSuperAdminTab(tabParam) ? tabParam : "overview"
-  );
+  const activeTab: SuperAdminTab = isSuperAdminTab(tabParam) ? tabParam : "overview";
 
   const [telemetry, setTelemetry] = useState<SystemTelemetryData | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [profile, setProfile] = useState<CurrentProfile | null>(() => getCurrentProfile());
 
-  // An unknown ?tab= value is corrected to Overview so a stale bookmark cannot
-  // land on a page that no longer exists.
+  // Background prefetch all core dashboard data on initial load
   useEffect(() => {
-    if (isSuperAdminTab(tabParam)) {
-      setActiveTab(tabParam);
-    } else if (tabParam !== null) {
-      const params = new URLSearchParams(searchParams.toString());
-      params.set("tab", "overview");
-      router.replace(`${pathname}?${params.toString()}`, { scroll: false });
-    }
-  }, [tabParam, pathname, router, searchParams]);
+    void prefetchDashboardData(apiFetch, "super admin");
+  }, []);
 
-  const loadTelemetry = useCallback(async () => {
+  const loadTelemetry = useCallback(async (force = false) => {
     setIsRefreshing(true);
+    if (force) {
+      invalidateCache("/api/v1/health");
+      invalidateCache("/api/v1/superuser");
+    }
     try {
       setTelemetry(await fetchSystemTelemetry());
     } finally {
@@ -62,12 +60,16 @@ function SuperAdminDashboardContent() {
     void loadTelemetry();
   }, [loadTelemetry]);
 
-  const handleTabChange = (tab: SuperAdminTab) => {
-    setActiveTab(tab);
+  const handleTabChange = useCallback((tab: SuperAdminTab) => {
     const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", tab);
-    router.push(`${pathname}?${params.toString()}`, { scroll: false });
-  };
+    if (tab === "overview") {
+      params.delete("tab");
+    } else {
+      params.set("tab", tab);
+    }
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname, { scroll: false });
+  }, [pathname, router, searchParams]);
 
   const activeMeta = SUPER_ADMIN_TABS.find((tab) => tab.key === activeTab);
 
@@ -94,7 +96,7 @@ function SuperAdminDashboardContent() {
                   authProvider={current?.authProvider ?? session.user.auth_provider ?? null}
                   telemetry={telemetry}
                   isRefreshing={isRefreshing}
-                  onRefresh={loadTelemetry}
+                  onRefresh={() => loadTelemetry(true)}
                 />
               )}
 

@@ -23,13 +23,12 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
       {
         title: "Student Operations",
         items: [
-          { label: "My Performance", href: "/dashboard/student", icon: "trending_up" },
-          { label: "My Tasks", href: "/dashboard/student#tasks", icon: "task_alt" },
-          { label: "Internship Journey", href: "/dashboard/student#internship", icon: "school" },
-          { label: "Japanese Learning", href: "/dashboard/student#japanese", icon: "translate" },
-          { label: "Self Evaluation", href: "/dashboard/student#evaluation", icon: "rate_review" },
-          { label: "Feedback", href: "/dashboard/student#feedback", icon: "forum" },
-          { label: "History", href: "/dashboard/student#history", icon: "history" },
+          { label: "My Performance", href: "/student/dashboard", icon: "trending_up" },
+          { label: "Learning Progress", href: "/student/learning-progress", icon: "school" },
+          { label: "Evaluations", href: "/student/evaluations", icon: "rate_review" },
+          { label: "Feedback", href: "/student/feedback", icon: "forum" },
+          { label: "Reports", href: "/student/reports", icon: "summarize" },
+          { label: "Mentors", href: "/student/mentors", icon: "groups" },
         ],
       },
     ];
@@ -264,7 +263,13 @@ export default function Sidebar({
                   isActive = isExactPath && itemTab === currentTab;
                 } else {
                   const currentTab = searchParams.get("tab");
-                  isActive = isExactPath && (!currentTab || currentTab === "overview");
+                  isActive =
+                    isExactPath &&
+                    (!currentTab ||
+                      currentTab === "overview" ||
+                      currentTab === "dashboard" ||
+                      currentTab === "employees" ||
+                      currentTab === "team");
                 }
                 return (
                   <div key={item.href} className="relative group">

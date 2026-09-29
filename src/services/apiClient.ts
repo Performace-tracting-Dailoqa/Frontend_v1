@@ -1,6 +1,9 @@
 "use client";
 
 import { getAuthToken } from "@/utils/auth";
+import { getCachedData, setCachedData, invalidateCache } from "./dataCache";
+
+export { invalidateCache, getCachedData, setCachedData } from "./dataCache";
 
 /**
  * Error thrown by every PMS API call.
@@ -61,13 +64,18 @@ export function buildHeaders(): Record<string, string> {
   return headers;
 }
 
+export interface ApiFetchOptions extends RequestInit {
+  forceRefresh?: boolean;
+  bypassCache?: boolean;
+}
+
 /**
  * Authenticated same-origin fetch against the PMS API.
  *
  * All PMS calls go through the Next.js rewrite (`/api/*` -> backend `/api/*`)
  * so credentials stay same-origin and CORS never applies.
  */
-export async function apiFetch(url: string, options: RequestInit = {}): Promise<Response> {
+export async function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Response> {
   return fetch(url, {
     ...options,
     credentials: "same-origin",
@@ -82,16 +90,31 @@ export async function apiFetch(url: string, options: RequestInit = {}): Promise<
  * Perform a request and parse the JSON body, throwing a normalized `ApiError`
  * for any non-2xx response.
  *
+ * Uses a 1-hour client cache for GET requests to provide instantaneous page navigation.
+ * Mutations (POST, PUT, DELETE) automatically invalidate the cache.
+ *
  * @param failureMessage Message used when the backend sends no error body.
  */
 export async function apiJson<T>(
   url: string,
-  options: RequestInit = {},
+  options: ApiFetchOptions = {},
   failureMessage = "Request failed"
 ): Promise<T> {
+  const method = (options.method || "GET").toUpperCase();
+  const isGet = method === "GET";
+  const shouldCheckCache = isGet && !options.forceRefresh && !options.bypassCache;
+
+  if (shouldCheckCache) {
+    const cached = getCachedData<T>(url);
+    if (cached !== null) {
+      return cached;
+    }
+  }
+
   const res = await apiFetch(url, options);
 
   if (res.status === 204) {
+    if (!isGet) invalidateCache();
     return undefined as T;
   }
 
@@ -105,6 +128,14 @@ export async function apiJson<T>(
   if (!res.ok) {
     const { message, code } = extractError(payload, `${failureMessage} (${res.status})`);
     throw new ApiError(message, res.status, code);
+  }
+
+  // Cache successful GET responses
+  if (isGet && payload !== null) {
+    setCachedData(url, payload);
+  } else if (!isGet) {
+    // Invalidate cached data after state mutations
+    invalidateCache();
   }
 
   return payload as T;
@@ -121,3 +152,4 @@ export function errorMessage(error: unknown, fallback: string): string {
   if (error instanceof Error && error.message) return error.message;
   return fallback;
 }
+

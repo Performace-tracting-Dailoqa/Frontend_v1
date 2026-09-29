@@ -1,11 +1,12 @@
 "use client";
 
 import React, { useState, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import { TeacherTab } from "@/components/teacher/types";
 import TeacherNavTabs from "@/components/teacher/TeacherNavTabs";
+import { TeacherStudent } from "@/services/teacherService";
 
 import DashboardTab from "@/components/teacher/tabs/DashboardTab";
 import LearnersTab from "@/components/teacher/tabs/LearnersTab";
@@ -17,15 +18,20 @@ import ReportsTab from "@/components/teacher/tabs/ReportsTab";
 import HistoryTab from "@/components/teacher/tabs/HistoryTab";
 
 function TeacherDashboardContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as TeacherTab | null;
   const activeTab: TeacherTab = tabParam || "dashboard";
 
-  const [exportNotice, setExportNotice] = useState(false);
+  const [selectedStudentForEval, setSelectedStudentForEval] = useState<TeacherStudent | null>(null);
 
-  const handleExport = () => {
-    setExportNotice(true);
-    setTimeout(() => setExportNotice(false), 3000);
+  const handleNavigateTab = (tab: string) => {
+    router.push(`/dashboard/teacher?tab=${tab}`);
+  };
+
+  const handleSelectStudentForEval = (student: TeacherStudent) => {
+    setSelectedStudentForEval(student);
+    router.push("/dashboard/teacher?tab=evaluations");
   };
 
   return (
@@ -40,14 +46,6 @@ function TeacherDashboardContent() {
         return (
           <DashboardLayout>
             <div className="space-y-6 max-w-7xl mx-auto pb-12">
-              {/* Export Toast Notification */}
-              {exportNotice && (
-                <div className="fixed top-20 right-8 z-50 bg-[#0B0B12] text-white px-4 py-3 rounded-xl shadow-lg border border-white/10 flex items-center gap-3 animate-fade-in">
-                  <span className="material-symbols-outlined text-emerald-400">check_circle</span>
-                  <span className="text-body-sm font-medium">Cohort report export requested.</span>
-                </div>
-              )}
-
               {/* Welcome & Overview Header */}
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-surface-container-lowest p-6 lg:p-8 rounded-2xl border border-outline-variant/40 shadow-xs relative overflow-hidden">
                 <div className="absolute -right-20 -bottom-20 w-80 h-80 bg-primary/5 rounded-full blur-3xl pointer-events-none" />
@@ -70,14 +68,14 @@ function TeacherDashboardContent() {
 
                 <div className="flex flex-wrap items-center gap-3 z-10">
                   <button
-                    onClick={handleExport}
+                    onClick={() => handleNavigateTab("reports")}
                     className="flex items-center gap-2 bg-surface-container px-4 py-2.5 rounded-xl text-body-md text-on-surface hover:bg-surface-container-high transition-all border border-outline-variant/50 font-medium cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-lg">download</span>
                     <span>Export Reports</span>
                   </button>
                   <button
-                    onClick={() => alert("Evaluation creation will be enabled when evaluation APIs are integrated.")}
+                    onClick={() => handleNavigateTab("evaluations")}
                     className="flex items-center gap-2 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white px-4 py-2.5 rounded-xl text-body-md font-medium transition-all shadow-sm cursor-pointer"
                   >
                     <span className="material-symbols-outlined text-lg">add</span>
@@ -86,67 +84,26 @@ function TeacherDashboardContent() {
                 </div>
               </div>
 
-              {/* Navigation Tabs per Teacher Spec */}
+              {/* Navigation Tabs */}
               <TeacherNavTabs activeTab={activeTab} />
 
-              {/* KPI Cards Grid Grounded in Real /auth/me Data */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-                <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/40 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-outline mb-2">
-                    <span className="text-label-sm font-medium">Assigned Batches</span>
-                    <span className="material-symbols-outlined text-primary">school</span>
-                  </div>
-                  <div>
-                    <span className="text-2xl font-bold font-headline text-on-surface">{assignedBatches.length}</span>
-                    <div className="text-[11px] text-outline font-medium mt-1">From backend scope</div>
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/40 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-outline mb-2">
-                    <span className="text-label-sm font-medium">Assigned Learners</span>
-                    <span className="material-symbols-outlined text-secondary">groups</span>
-                  </div>
-                  <div>
-                    <span className="text-2xl font-bold font-headline text-on-surface">{assignedLearnerCount}</span>
-                    <div className="text-[11px] text-outline font-medium mt-1">Based on batch membership</div>
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/40 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-outline mb-2">
-                    <span className="text-label-sm font-medium">Specialization</span>
-                    <span className="material-symbols-outlined text-[#a44100]">psychology</span>
-                  </div>
-                  <div>
-                    <span className="text-lg font-bold font-headline text-on-surface truncate block">
-                      {teacherProfile?.specialization || "General Mentor"}
-                    </span>
-                    <div className="text-[11px] text-outline font-medium mt-1">Profile specialty</div>
-                  </div>
-                </div>
-
-                <div className="bg-surface-container-lowest p-4 rounded-xl border border-outline-variant/40 shadow-xs flex flex-col justify-between">
-                  <div className="flex items-center justify-between text-outline mb-2">
-                    <span className="text-label-sm font-medium">Authority Scope</span>
-                    <span className="material-symbols-outlined text-emerald-600">verified_user</span>
-                  </div>
-                  <div>
-                    <span className="text-lg font-bold font-headline text-on-surface">
-                      {teacherScope?.scope_type || "assigned_learners"}
-                    </span>
-                    <div className="text-[11px] text-emerald-600 font-medium mt-1">Verified /auth/me</div>
-                  </div>
-                </div>
-              </div>
-
               {/* Active Tab Content */}
-              {activeTab === "dashboard" && <DashboardTab />}
-              {activeTab === "learners" && <LearnersTab />}
+              {activeTab === "dashboard" && (
+                <DashboardTab
+                  assignedBatches={assignedBatches}
+                  assignedLearnerCount={assignedLearnerCount}
+                  onNavigateTab={handleNavigateTab}
+                />
+              )}
+              {activeTab === "learners" && (
+                <LearnersTab onSelectStudent={handleSelectStudentForEval} />
+              )}
               {activeTab === "progress" && <ProgressTab />}
               {activeTab === "japanese" && <JapaneseTab />}
               {activeTab === "feedback" && <FeedbackTab />}
-              {activeTab === "evaluations" && <EvaluationsTab />}
+              {activeTab === "evaluations" && (
+                <EvaluationsTab initialStudent={selectedStudentForEval} />
+              )}
               {activeTab === "reports" && <ReportsTab />}
               {activeTab === "history" && <HistoryTab />}
             </div>

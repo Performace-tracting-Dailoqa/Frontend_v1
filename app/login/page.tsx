@@ -80,17 +80,25 @@ function LoginForm() {
       //    and store ONLY profile metadata — no token in localStorage.
       const meData = await fetchMe();
 
+      const mustChange = Boolean(loginData.must_change_password || meData.must_change_password);
+
       saveAuthSession({
         token: loginData.access_token,
         tokenType: loginData.token_type || "bearer",
         expiresIn: loginData.expires_in,
-        mustChangePassword: false,
+        mustChangePassword: mustChange,
         user: meData,
         role: meData.role,
         profile: meData.profile || null,
         scope: meData.scope || null,
         loginAt: new Date().toISOString(),
       });
+
+      // If temporary password was used or password reset is required, route directly to reset-password
+      if (mustChange) {
+        router.push(`/reset-password?required=true&email=${encodeURIComponent(meData.email || email)}`);
+        return;
+      }
 
       // 4. Role-based routing based strictly on /auth/me
       const targetDashboard = getRoleDashboardPath(meData.role?.name);

@@ -8,9 +8,12 @@ import {
   DirectoryRole,
   fetchDirectory,
   fetchStudentReport,
+  getCurrentProfile,
   setPersonActive,
   StudentReportData,
 } from "@/services/adminService";
+import { getAuthSession } from "@/utils/auth";
+import AddPersonTab from "./AddPersonTab";
 import {
   Avatar,
   EmptyState,
@@ -53,6 +56,28 @@ const ROLE_META: Record<DirectoryRole, { label: string; plural: string; icon: st
 };
 
 const ROLE_ORDER: DirectoryRole[] = ["HR Manager", "Manager", "Teacher", "Intern"];
+
+function canManagePersonStatus(currentRoleName: string, targetPerson: DirectoryPerson): boolean {
+  const norm = (currentRoleName || "").trim().toLowerCase();
+  if (norm.includes("super admin") || norm.includes("superuser")) {
+    return true;
+  }
+  if (norm.includes("hr")) {
+    // One HR cannot suspend or deactivate another HR
+    if (targetPerson.role === "HR Manager") {
+      return false;
+    }
+    return true;
+  }
+  if (norm.includes("manager")) {
+    // One Manager cannot suspend other Manager, HR, or Teacher. Manager can only suspend Interns (students/employees).
+    if (targetPerson.role === "Intern") {
+      return true;
+    }
+    return false;
+  }
+  return false;
+}
 
 function formatDate(value: string | null | undefined): string {
   if (!value) return "—";
@@ -145,6 +170,11 @@ function paginationItems(current: number, total: number, span = 1): Array<number
 }
 
 export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: PeopleTabProps) {
+  const session = getAuthSession();
+  const currentProfile = getCurrentProfile();
+  const currentRoleName = session?.user?.role?.name || currentProfile?.role?.name || "";
+  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+
   const [people, setPeople] = useState<DirectoryPerson[]>([]);
   const [failedRoles, setFailedRoles] = useState<DirectoryRole[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -291,6 +321,14 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
   };
 
   const handleToggleActive = (person: DirectoryPerson) => {
+    if (!canManagePersonStatus(currentRoleName, person)) {
+      setActionError(
+        currentRoleName.toLowerCase().includes("manager")
+          ? "Managers cannot suspend or activate other managers or staff."
+          : "An HR officer cannot suspend or activate another HR officer."
+      );
+      return;
+    }
     const nextActive = !person.isActive;
     void runAction(person, async () => {
       await setPersonActive(person, nextActive);
@@ -298,6 +336,14 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
   };
 
   const handleDeactivate = (person: DirectoryPerson) => {
+    if (!canManagePersonStatus(currentRoleName, person)) {
+      setActionError(
+        currentRoleName.toLowerCase().includes("manager")
+          ? "Managers cannot deactivate other managers or staff."
+          : "An HR officer cannot deactivate another HR officer."
+      );
+      return;
+    }
     if (
       !window.confirm(
         `Deactivate ${person.name}? Their account stays in the database but can no longer sign in.`
@@ -359,11 +405,18 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
                 { value: "inactive", label: "Deactivated" },
               ]}
             />
-            {onOpenAddPerson && (
-              <PrimaryButton onClick={onOpenAddPerson} icon="person_add">
-                Add Person
-              </PrimaryButton>
-            )}
+            <PrimaryButton
+              onClick={() => {
+                if (onOpenAddPerson) {
+                  onOpenAddPerson();
+                } else {
+                  setIsAddModalOpen(true);
+                }
+              }}
+              icon="person_add"
+            >
+              Add Person
+            </PrimaryButton>
           </div>
         }
       />
@@ -516,7 +569,7 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
                           <div className="flex items-center justify-end gap-1.5">
                             {isPending ? (
                               <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
-                            ) : (
+                            ) : canManagePersonStatus(currentRoleName, person) ? (
                               <>
                                 <button
                                   type="button"
@@ -535,6 +588,8 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
                                   </button>
                                 )}
                               </>
+                            ) : (
+                              <span className="text-[11px] text-slate-400 font-medium px-2 py-1 bg-slate-50 rounded">Read-only</span>
                             )}
                           </div>
                         </td>
@@ -1187,24 +1242,32 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
                               ))}
                             </div>
 
-                            <div className="flex gap-2">
-                              <PrimaryButton
-                                onClick={() => handleToggleActive(selected)}
-                                icon={selected.isActive ? "block" : "check_circle"}
-                                className="flex-1 justify-center"
-                              >
-                                {selected.isActive ? "Suspend account" : "Activate account"}
-                              </PrimaryButton>
-                              {selected.isActive && (
+                            {canManagePersonStatus(currentRoleName, selected) ? (
+                              <div className="flex gap-2">
                                 <PrimaryButton
-                                  onClick={() => handleDeactivate(selected)}
-                                  tone="slate"
-                                  icon="person_off"
+                                  onClick={() => handleToggleActive(selected)}
+                                  icon={selected.isActive ? "block" : "check_circle"}
+                                  className="flex-1 justify-center"
                                 >
-                                  Deactivate
+                                  {selected.isActive ? "Suspend account" : "Activate account"}
                                 </PrimaryButton>
-                              )}
-                            </div>
+                                {selected.isActive && (
+                                  <PrimaryButton
+                                    onClick={() => handleDeactivate(selected)}
+                                    tone="slate"
+                                    icon="person_off"
+                                  >
+                                    Deactivate
+                                  </PrimaryButton>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="p-3 rounded-xl bg-slate-100 text-center text-xs text-slate-500 font-medium">
+                                {currentRoleName.toLowerCase().includes("manager")
+                                  ? "Managers cannot suspend other staff members or colleagues."
+                                  : "HR cannot suspend or deactivate other HR officers."}
+                              </div>
+                            )}
                           </div>
                         )}
                       </>
@@ -1236,24 +1299,32 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
                       ))}
                     </div>
 
-                    <div className="flex gap-2">
-                      <PrimaryButton
-                        onClick={() => handleToggleActive(selected)}
-                        icon={selected.isActive ? "block" : "check_circle"}
-                        className="flex-1 justify-center"
-                      >
-                        {selected.isActive ? "Suspend account" : "Activate account"}
-                      </PrimaryButton>
-                      {selected.isActive && (
+                    {canManagePersonStatus(currentRoleName, selected) ? (
+                      <div className="flex gap-2">
                         <PrimaryButton
-                          onClick={() => handleDeactivate(selected)}
-                          tone="slate"
-                          icon="person_off"
+                          onClick={() => handleToggleActive(selected)}
+                          icon={selected.isActive ? "block" : "check_circle"}
+                          className="flex-1 justify-center"
                         >
-                          Deactivate
+                          {selected.isActive ? "Suspend account" : "Activate account"}
                         </PrimaryButton>
-                      )}
-                    </div>
+                        {selected.isActive && (
+                          <PrimaryButton
+                            onClick={() => handleDeactivate(selected)}
+                            tone="slate"
+                            icon="person_off"
+                          >
+                            Deactivate
+                          </PrimaryButton>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-3 rounded-xl bg-slate-100 text-center text-xs text-slate-500 font-medium">
+                        {currentRoleName.toLowerCase().includes("manager")
+                          ? "Managers cannot suspend other staff members or colleagues."
+                          : "HR cannot suspend or deactivate other HR officers."}
+                      </div>
+                    )}
                   </>
                 )}
               </div>
@@ -1261,6 +1332,28 @@ export default function PeopleTab({ onOpenAddPerson, onDirectoryLoaded }: People
           </div>
         )}
       </AnimatePresence>
+
+      {/* Add Person Modal (Fallback when embedded without tab navigation) */}
+      {isAddModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-y-auto p-6 relative">
+            <button
+              type="button"
+              onClick={() => setIsAddModalOpen(false)}
+              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1.5 rounded-lg hover:bg-slate-100 transition-colors z-20 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-lg">close</span>
+            </button>
+            <AddPersonTab
+              onNavigateTab={() => setIsAddModalOpen(false)}
+              onPersonCreated={() => {
+                setIsAddModalOpen(false);
+                void load();
+              }}
+            />
+          </div>
+        </div>
+      )}
 
     </motion.div>
   );

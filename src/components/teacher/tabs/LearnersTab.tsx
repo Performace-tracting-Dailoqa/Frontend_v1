@@ -356,7 +356,7 @@ export default function LearnersTab({ onSelectStudent }: LearnersTabProps) {
             ) : (
               <div className="py-4 space-y-5">
                 {/* Basic Meta Cards */}
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 text-xs">
                   <div className="bg-surface-container/60 p-3 rounded-xl border border-outline-variant/30">
                     <span className="text-[10px] text-outline font-semibold uppercase block">Enrollment No</span>
                     <span className="font-bold text-on-surface mt-0.5 block">
@@ -377,8 +377,14 @@ export default function LearnersTab({ onSelectStudent }: LearnersTabProps) {
                   </div>
                   <div className="bg-surface-container/60 p-3 rounded-xl border border-outline-variant/30">
                     <span className="text-[10px] text-outline font-semibold uppercase block">Batch Assigned</span>
-                    <span className="font-bold text-primary mt-0.5 block">
+                    <span className="font-bold text-primary mt-0.5 block truncate">
                       {profileData?.batch_name || "Unassigned"}
+                    </span>
+                  </div>
+                  <div className="bg-surface-container/60 p-3 rounded-xl border border-outline-variant/30 col-span-2 sm:col-span-1">
+                    <span className="text-[10px] text-outline font-semibold uppercase block">Attendance Rate</span>
+                    <span className="font-bold text-emerald-600 mt-0.5 block">
+                      {profileData?.attendance_rate ?? 100}%
                     </span>
                   </div>
                 </div>
@@ -413,6 +419,56 @@ export default function LearnersTab({ onSelectStudent }: LearnersTabProps) {
                   </div>
                 </div>
 
+                {/* Attendance Ledger */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-sm text-emerald-600">calendar_month</span>
+                      <span>Attendance &amp; Participation Ledger</span>
+                    </h4>
+                    <span className="text-[11px] font-semibold text-outline">
+                      {profileData?.attendance_records?.length || 0} entries
+                    </span>
+                  </div>
+                  {profileData?.attendance_records && profileData.attendance_records.length > 0 ? (
+                    <div className="space-y-2 max-h-52 overflow-y-auto">
+                      {profileData.attendance_records.map((rec: any) => {
+                        const statusColors: Record<string, string> = {
+                          present: "bg-emerald-50 text-emerald-700 border-emerald-200",
+                          late: "bg-amber-50 text-amber-700 border-amber-200",
+                          absent: "bg-red-50 text-red-700 border-red-200",
+                          excused: "bg-blue-50 text-blue-700 border-blue-200",
+                        };
+                        const colorClass = statusColors[rec.status?.toLowerCase()] || "bg-slate-50 text-slate-700 border-slate-200";
+
+                        return (
+                          <div
+                            key={rec.id}
+                            className="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/40 text-xs flex items-center justify-between gap-3"
+                          >
+                            <div>
+                              <div className="font-semibold text-on-surface">
+                                {rec.date ? new Date(rec.date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                              </div>
+                              <div className="text-[11px] text-outline capitalize mt-0.5">
+                                Track: {rec.track || "Japanese Language"}
+                                {rec.remarks && <span className="ml-2 italic text-on-surface-variant">&ldquo;{rec.remarks}&rdquo;</span>}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border uppercase ${colorClass}`}>
+                              {rec.status}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className="text-xs text-outline italic p-3 bg-surface-container/20 rounded-xl border border-dashed border-outline-variant/40">
+                      No attendance entries logged for this learner yet. Use the Attendance tab to log daily attendance.
+                    </p>
+                  )}
+                </div>
+
                 {/* General Evaluations History */}
                 <div>
                   <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider mb-2 flex items-center gap-1.5">
@@ -443,47 +499,6 @@ export default function LearnersTab({ onSelectStudent }: LearnersTabProps) {
                   ) : (
                     <p className="text-xs text-outline italic p-3 bg-surface-container/20 rounded-xl border border-dashed border-outline-variant/40">
                       No general evaluations recorded for this learner yet.
-                    </p>
-                  )}
-                </div>
-
-                {/* Workflow Tasks & Self-Grades */}
-                <div>
-                  <h4 className="text-xs font-bold text-on-surface uppercase tracking-wider mb-2 flex items-center gap-1.5">
-                    <span className="material-symbols-outlined text-sm text-indigo-600">assignment</span>
-                    <span>Recent Assigned Tasks &amp; Submissions</span>
-                  </h4>
-                  {profileData?.workflow_tasks && profileData.workflow_tasks.length > 0 ? (
-                    <div className="space-y-2 max-h-48 overflow-y-auto">
-                      {profileData.workflow_tasks.map((task: any) => (
-                        <div
-                          key={task.id}
-                          className="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/40 text-xs flex items-start justify-between gap-3"
-                        >
-                          <div>
-                            <div className="font-bold text-on-surface">{task.title}</div>
-                            {task.submission_notes && (
-                              <p className="text-[11px] text-indigo-700 bg-indigo-50/70 p-1.5 rounded mt-1">
-                                <strong>Submission:</strong> {task.submission_notes}
-                              </p>
-                            )}
-                          </div>
-                          <div className="text-right shrink-0">
-                            {task.student_grade !== null && task.student_grade !== undefined && (
-                              <span className="px-2 py-0.5 rounded bg-emerald-50 text-emerald-800 font-bold text-[10px] block mb-1">
-                                Self-Grade: {task.student_grade}/100
-                              </span>
-                            )}
-                            <span className="capitalize text-[10px] font-semibold text-outline">
-                              {task.status || "pending"}
-                            </span>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <p className="text-xs text-outline italic p-3 bg-surface-container/20 rounded-xl border border-dashed border-outline-variant/40">
-                      No workflow deliverables logged.
                     </p>
                   )}
                 </div>

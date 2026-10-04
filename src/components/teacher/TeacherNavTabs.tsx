@@ -7,6 +7,7 @@ import { TeacherTab } from "./types";
 
 const tabs: { id: TeacherTab; label: string; icon: string }[] = [
   { id: "dashboard", label: "Dashboard", icon: "dashboard" },
+  { id: "attendance", label: "Attendance Marking", icon: "how_to_reg" },
   { id: "learners", label: "My Learners", icon: "groups" },
   { id: "progress", label: "Learning Progress", icon: "trending_up" },
   { id: "japanese", label: "Japanese", icon: "translate" },

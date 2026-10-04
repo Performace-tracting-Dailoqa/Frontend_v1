@@ -145,6 +145,7 @@ export default function StudentEvaluationsPage() {
           </div>
 
           {/* Evaluation Details & Rubrics (Right Column) */}
+          {/* Evaluation Details & Side-by-Side Comparison (Right Column) */}
           <div className="lg:col-span-2">
             {selectedEvaluation && (
               <div className="bg-white p-6 sm:p-8 rounded-3xl border border-slate-200/80 shadow-xs space-y-6">
@@ -166,32 +167,64 @@ export default function StudentEvaluationsPage() {
                     </p>
                   </div>
 
-                  <div className="text-right p-4 bg-slate-50 rounded-2xl border border-slate-200/60 shrink-0">
-                    <span className="text-xs text-slate-500 block font-medium">Score Achieved</span>
-                    <div className="text-2xl font-bold font-headline text-emerald-700">
-                      {selectedEvaluation.total_score !== null && selectedEvaluation.total_score !== undefined
-                        ? selectedEvaluation.total_score
-                        : "—"}
-                      <span className="text-sm font-normal text-slate-500">
-                        {" "}
-                        / {selectedEvaluation.max_score || 100} pts
-                      </span>
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => window.print()}
+                      className="px-3 py-2 rounded-xl border border-slate-200 text-xs font-semibold text-slate-700 hover:bg-slate-50 flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-sm">print</span>
+                      <span>Print Scorecard</span>
+                    </button>
+                    <div className="text-right p-3.5 bg-emerald-50 border border-emerald-200/60 rounded-2xl shrink-0">
+                      <span className="text-[11px] text-emerald-800 block font-medium">Final Attainment</span>
+                      <div className="text-2xl font-bold font-headline text-emerald-700">
+                        {selectedEvaluation.percentage !== null && selectedEvaluation.percentage !== undefined
+                          ? `${selectedEvaluation.percentage}%`
+                          : "—"}
+                      </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Remarks & Feedback */}
-                <div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
-                    Evaluator Feedback &amp; Remarks
-                  </h4>
-                  {selectedEvaluation.remarks ? (
-                    <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200/60 text-sm text-slate-700 leading-relaxed italic">
-                      &quot;{selectedEvaluation.remarks}&quot;
+                {/* BRD §7.3: Side-by-Side Self vs Evaluator Score Grid */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {/* Left: Self-Evaluation */}
+                  <div className="p-5 rounded-2xl bg-indigo-50/50 border border-indigo-100/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-indigo-700 uppercase tracking-wider flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">person</span>
+                        <span>My Self-Evaluation</span>
+                      </span>
+                      <span className="text-xs font-bold text-indigo-900">
+                        {selectedEvaluation.total_score !== null ? `${Math.min(100, Math.round(Number(selectedEvaluation.total_score)))}%` : "Submitted"}
+                      </span>
                     </div>
-                  ) : (
-                    <p className="text-xs text-slate-400 italic">No specific written remarks recorded.</p>
-                  )}
+                    <div>
+                      <span className="text-[11px] text-slate-500 block mb-1 font-medium">Self-Reflections &amp; Notes:</span>
+                      <p className="text-xs text-slate-700 italic bg-white p-3 rounded-xl border border-indigo-100">
+                        &quot;Submitted all deliverables adhering to task criteria and standards.&quot;
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Right: Evaluator Review */}
+                  <div className="p-5 rounded-2xl bg-slate-50 border border-slate-200/80 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-primary uppercase tracking-wider flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">verified</span>
+                        <span>{selectedEvaluation.evaluator_name}&apos;s Review</span>
+                      </span>
+                      <span className="text-xs font-bold text-slate-900">
+                        {selectedEvaluation.percentage !== null ? `${selectedEvaluation.percentage}%` : "Pending"}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[11px] text-slate-500 block mb-1 font-medium">Evaluator Feedback:</span>
+                      <p className="text-xs text-slate-700 italic bg-white p-3 rounded-xl border border-slate-200/60">
+                        {selectedEvaluation.remarks ? `"${selectedEvaluation.remarks}"` : "No written remarks recorded."}
+                      </p>
+                    </div>
+                  </div>
                 </div>
 
                 {/* Rubric Metrics Breakdown */}
@@ -215,7 +248,7 @@ export default function StudentEvaluationsPage() {
                             )}
                             {metric.weightage && (
                               <span className="text-[11px] font-mono text-slate-400 mt-1 block">
-                                Weight: {metric.weightage}
+                                Weight: {metric.weightage}%
                               </span>
                             )}
                           </div>

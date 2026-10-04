@@ -16,6 +16,7 @@ import FeedbackTab from "@/components/teacher/tabs/FeedbackTab";
 import EvaluationsTab from "@/components/teacher/tabs/EvaluationsTab";
 import ReportsTab from "@/components/teacher/tabs/ReportsTab";
 import HistoryTab from "@/components/teacher/tabs/HistoryTab";
+import AttendanceTab from "@/components/teacher/tabs/AttendanceTab";
 
 function TeacherDashboardContent() {
   const router = useRouter();
@@ -95,6 +96,7 @@ function TeacherDashboardContent() {
                   onNavigateTab={handleNavigateTab}
                 />
               )}
+              {activeTab === "attendance" && <AttendanceTab />}
               {activeTab === "learners" && (
                 <LearnersTab onSelectStudent={handleSelectStudentForEval} />
               )}

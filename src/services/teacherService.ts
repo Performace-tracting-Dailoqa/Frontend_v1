@@ -24,6 +24,7 @@ export interface TeacherStudent {
   department?: string | null;
   status?: string;
   batch_name?: string | null;
+  enrollment_no?: string | null;
 }
 
 export interface GeneralMetric {

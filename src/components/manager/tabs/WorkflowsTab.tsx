@@ -1,16 +1,19 @@
 "use client";
 
 import React, { useState } from "react";
-import { Workflow } from "@/services/workflowService";
+import { Workflow, ManagerTeam } from "@/services/workflowService";
 
 interface WorkflowsTabProps {
   workflows: Workflow[];
   isLoading: boolean;
   selectedWorkflow: Workflow | null;
   onSelectWorkflow: (wf: Workflow) => void;
-  onCreateWorkflow: (data: { name: string; description?: string }) => Promise<void>;
+  onCreateWorkflow: (data: { name: string; description?: string; batch_id?: string }) => Promise<void>;
   onDeleteWorkflow: (id: string) => Promise<void>;
   onNavigateToProgress: () => void;
+  teams?: ManagerTeam[];
+  selectedTeam?: ManagerTeam | null;
+  onSelectTeam?: (team: ManagerTeam | null) => void;
 }
 
 export default function WorkflowsTab({
@@ -21,10 +24,14 @@ export default function WorkflowsTab({
   onCreateWorkflow,
   onDeleteWorkflow,
   onNavigateToProgress,
+  teams = [],
+  selectedTeam = null,
+  onSelectTeam,
 }: WorkflowsTabProps) {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
+  const [batchId, setBatchId] = useState(selectedTeam?.id || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -34,7 +41,11 @@ export default function WorkflowsTab({
     setIsSubmitting(true);
     setError(null);
     try {
-      await onCreateWorkflow({ name: name.trim(), description: description.trim() || undefined });
+      await onCreateWorkflow({
+        name: name.trim(),
+        description: description.trim() || undefined,
+        batch_id: batchId || selectedTeam?.id || undefined,
+      });
       setName("");
       setDescription("");
       setIsModalOpen(false);
@@ -51,16 +62,43 @@ export default function WorkflowsTab({
         <div>
           <h3 className="text-title-lg font-headline font-bold text-on-surface">Workflows &amp; Projects</h3>
           <p className="text-body-sm text-on-surface-variant">
-            Create structured operational or milestone tracks to organize learner assignments.
+            Create structured operational or milestone tracks linked directly to your managed teams.
           </p>
         </div>
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-4 py-2 bg-primary text-white text-body-sm font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-xs flex items-center gap-2 cursor-pointer self-start sm:self-auto"
-        >
-          <span className="material-symbols-outlined text-lg">add_circle</span>
-          <span>Create Workflow</span>
-        </button>
+        <div className="flex items-center gap-3 self-start sm:self-auto">
+          {teams.length > 0 && onSelectTeam && (
+            <select
+              value={selectedTeam?.id || "all"}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val === "all") onSelectTeam(null);
+                else {
+                  const t = teams.find((item) => item.id === val);
+                  if (t) onSelectTeam(t);
+                }
+              }}
+              className="px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium"
+            >
+              <option value="all">All Teams ({teams.length})</option>
+              {teams.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                </option>
+              ))}
+            </select>
+          )}
+
+          <button
+            onClick={() => {
+              setBatchId(selectedTeam?.id || (teams.length > 0 ? teams[0].id : ""));
+              setIsModalOpen(true);
+            }}
+            className="px-4 py-2 bg-primary text-white text-body-sm font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-xs flex items-center gap-2 cursor-pointer shrink-0"
+          >
+            <span className="material-symbols-outlined text-lg">add_circle</span>
+            <span>Create Workflow</span>
+          </button>
+        </div>
       </div>
 
       {isLoading ? (
@@ -98,9 +136,14 @@ export default function WorkflowsTab({
               >
                 <div>
                   <div className="flex items-center justify-between mb-3">
-                    <span className="px-2.5 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full uppercase tracking-wider">
-                      {wf.status || "Active"}
-                    </span>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-md">
+                        {wf.batch_name || "Team Track"}
+                      </span>
+                      <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full uppercase tracking-wider">
+                        {wf.status || "Active"}
+                      </span>
+                    </div>
                     <button
                       onClick={() => onDeleteWorkflow(wf.id)}
                       className="text-outline hover:text-red-600 transition-colors p-1 cursor-pointer"
@@ -158,6 +201,26 @@ export default function WorkflowsTab({
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
+              {teams.length > 0 && (
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1">
+                    Assign to Team / Cohort
+                  </label>
+                  <select
+                    value={batchId}
+                    onChange={(e) => setBatchId(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+                  >
+                    <option value="">Select Team (Optional)</option>
+                    {teams.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.department || "General"})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
               <div>
                 <label className="block text-xs font-semibold text-on-surface mb-1">
                   Workflow Name *
@@ -178,14 +241,14 @@ export default function WorkflowsTab({
                 </label>
                 <textarea
                   rows={3}
-                  placeholder="Summarize the core objectives and scope of this workflow..."
+                  placeholder="Summarize the core requirements, deliverables, or objectives..."
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary"
+                  className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary resize-none"
                 />
               </div>
 
-              <div className="flex justify-end gap-2 pt-2">
+              <div className="flex items-center justify-end gap-2 pt-2">
                 <button
                   type="button"
                   onClick={() => setIsModalOpen(false)}
@@ -195,10 +258,13 @@ export default function WorkflowsTab({
                 </button>
                 <button
                   type="submit"
-                  disabled={isSubmitting || !name.trim()}
-                  className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-all disabled:opacity-50 cursor-pointer"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-all cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
                 >
-                  {isSubmitting ? "Creating..." : "Create Track"}
+                  {isSubmitting && (
+                    <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                  )}
+                  <span>Create Workflow</span>
                 </button>
               </div>
             </form>

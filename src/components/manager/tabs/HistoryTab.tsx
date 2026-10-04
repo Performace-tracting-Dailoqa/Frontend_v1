@@ -103,8 +103,13 @@ export default function HistoryTab({ tasks, teamMembers }: HistoryTabProps) {
                         )}
                       </td>
                       <td className="px-5 py-4">
-                        <div className="text-xs font-semibold text-on-surface">{student?.name || "Intern"}</div>
-                        <div className="text-[11px] text-outline font-mono">{student?.batch_name || "Assigned Batch"}</div>
+                        <div className="text-xs font-semibold text-on-surface">
+                          {student?.name || task.student_name || "Learner"}
+                        </div>
+                        <div className="text-[11px] text-outline font-mono">
+                          {student?.enrollment_no || task.enrollment_no ? `ID: ${student?.enrollment_no || task.enrollment_no} • ` : ""}
+                          {student?.batch_name || task.workflow_name || "Assigned Cohort"}
+                        </div>
                       </td>
                       <td className="px-5 py-4">
                         {hasStudent ? (

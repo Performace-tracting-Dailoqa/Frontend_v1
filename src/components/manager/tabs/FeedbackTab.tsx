@@ -129,7 +129,9 @@ export default function FeedbackTab({ tasks, teamMembers }: FeedbackTabProps) {
 
                   <h4 className="font-bold text-sm text-on-surface font-headline">{task.title}</h4>
                   <p className="text-xs text-slate-500 mt-0.5">
-                    Learner: <strong className="text-slate-800">{student?.name || "Intern"}</strong>
+                    Learner: <strong className="text-slate-800">{student?.name || task.student_name || "Learner"}</strong>
+                    {student?.enrollment_no || task.enrollment_no ? ` • ID: ${student?.enrollment_no || task.enrollment_no}` : ""}
+                    {task.workflow_name ? ` • Workflow: ${task.workflow_name}` : ""}
                   </p>
 
                   {/* Student Reflection */}

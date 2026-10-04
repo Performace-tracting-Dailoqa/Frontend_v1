@@ -551,13 +551,14 @@ export default function ProgressTab({
                       </td>
                       <td className="px-5 py-4">
                         {hasManagerGrade ? (
-                          <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 inline-flex items-center gap-1 font-mono">
-                            <span className="material-symbols-outlined text-xs">verified</span>
-                            <span>{task.manager_grade} / 100</span>
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-300 inline-flex items-center gap-1.5 font-mono">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                            <span>Evaluated ({task.manager_grade}%)</span>
                           </span>
                         ) : (
-                          <span className="text-xs text-amber-700 font-semibold bg-amber-50 px-2 py-0.5 rounded text-[11px]">
-                            Ungraded
+                          <span className="px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300 inline-flex items-center gap-1.5 font-mono">
+                            <span className="w-2 h-2 rounded-full bg-rose-500"></span>
+                            <span>Not Evaluated</span>
                           </span>
                         )}
                       </td>

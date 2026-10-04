@@ -4,6 +4,8 @@ import { getAuthToken } from "@/utils/auth";
 
 export interface Workflow {
   id: string;
+  batch_id?: string | null;
+  batch_name?: string | null;
   name: string;
   description?: string | null;
   is_active: boolean;
@@ -11,6 +13,13 @@ export interface Workflow {
   evaluator_manager_id: string;
   created_at: string;
   updated_at: string;
+}
+
+export interface MetricGradeItem {
+  metric_name: string;
+  score: number;
+  full_score: number;
+  remarks?: string;
 }
 
 export interface WorkflowTask {
@@ -26,10 +35,14 @@ export interface WorkflowTask {
   student_id: string;
   assigned_by_manager_id: string;
   student_grade?: number | null;
-  student_metric_grades?: any[] | null;
+  student_metric_grades?: MetricGradeItem[] | null;
   manager_grade?: number | null;
   final_grade?: number | null;
   submission_notes?: string | null;
+  student_name?: string | null;
+  student_email?: string | null;
+  enrollment_no?: string | null;
+  workflow_name?: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -58,8 +71,9 @@ function getHeaders(): HeadersInit {
 // Manager Workflows (/api/v1/manager/workflows)
 // ---------------------------------------------------------------------------
 
-export async function fetchWorkflows(page = 1, pageSize = 50): Promise<PaginatedResponse<Workflow>> {
+export async function fetchWorkflows(page = 1, pageSize = 50, batchId?: string): Promise<PaginatedResponse<Workflow>> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (batchId && batchId !== "all") params.append("batch_id", batchId);
   const res = await fetch(`/api/v1/manager/workflows?${params.toString()}`, {
     headers: getHeaders(),
     cache: "no-store",
@@ -83,7 +97,7 @@ export async function getWorkflow(workflowId: string): Promise<Workflow> {
   return await res.json();
 }
 
-export async function createWorkflow(payload: { name: string; description?: string; is_active?: boolean }): Promise<Workflow> {
+export async function createWorkflow(payload: { name: string; description?: string; is_active?: boolean; batch_id?: string }): Promise<Workflow> {
   const res = await fetch("/api/v1/manager/workflows", {
     method: "POST",
     headers: getHeaders(),
@@ -202,6 +216,75 @@ export interface TeamMember {
   status?: string | null;
 }
 
+export interface ManagerTeam {
+  id: string;
+  name: string;
+  department?: string | null;
+  status?: string | null;
+  member_count: number;
+  active_workflows: number;
+  active_tasks: number;
+  completed_tasks: number;
+  pending_tasks: number;
+  evaluations_pending: number;
+  progress_percentage: number;
+  created_at?: string | null;
+}
+
+export async function fetchManagerTeams(): Promise<ManagerTeam[]> {
+  const res = await fetch("/api/v1/manager/teams", {
+    headers: getHeaders(),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager teams (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function createManagerTeam(payload: { name: string; department?: string; student_ids?: string[] }): Promise<ManagerTeam> {
+  const res = await fetch("/api/v1/manager/teams", {
+    method: "POST",
+    headers: getHeaders(),
+    credentials: "same-origin",
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to create manager team (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function fetchAvailableStudents(): Promise<TeamMember[]> {
+  const res = await fetch("/api/v1/manager/available-students", {
+    headers: getHeaders(),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch available students (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function addTeamMembers(teamId: string, studentIds: string[]): Promise<{ message: string; count: number }> {
+  const res = await fetch(`/api/v1/manager/teams/${teamId}/members`, {
+    method: "POST",
+    headers: getHeaders(),
+    credentials: "same-origin",
+    body: JSON.stringify({ student_ids: studentIds }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to add team members (${res.status})`);
+  }
+  return await res.json();
+}
+
 export async function fetchManagerTeam(): Promise<TeamMember[]> {
   const res = await fetch("/api/v1/manager/team", {
     headers: getHeaders(),
@@ -219,12 +302,6 @@ export async function fetchManagerTeam(): Promise<TeamMember[]> {
 // Student Workflow Tasks (/api/v1/student/tasks)
 // ---------------------------------------------------------------------------
 
-export interface MetricGradeItem {
-  metric_name: string;
-  score: number;
-  full_score: number;
-  remarks?: string;
-}
 
 export interface StudentTaskItem {
   id: string;
@@ -279,7 +356,7 @@ export async function updateStudentTaskStatus(
     student_metric_grades?: MetricGradeItem[] | null;
   }
 ): Promise<StudentTaskItem> {
-  const payload: Record<string, any> = { status };
+  const payload: Record<string, unknown> = { status };
   if (data?.student_grade !== undefined) payload.student_grade = data.student_grade;
   if (data?.submission_notes !== undefined) payload.submission_notes = data.submission_notes;
   if (data?.student_metric_grades !== undefined) payload.student_metric_grades = data.student_metric_grades;

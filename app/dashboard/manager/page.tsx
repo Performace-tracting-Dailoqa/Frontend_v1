@@ -10,6 +10,9 @@ import {
   Workflow,
   WorkflowTask,
   TeamMember,
+  ManagerTeam,
+  fetchManagerTeams,
+  createManagerTeam,
   fetchManagerTeam,
   fetchWorkflows,
   createWorkflow,
@@ -42,6 +45,11 @@ function ManagerDashboardContent() {
   const searchParams = useSearchParams();
   const tabParam = searchParams.get("tab") as ManagerTab | null;
   const activeTab: ManagerTab = tabParam || "dashboard";
+
+  // Team State (Manager Portfolios & Cohorts)
+  const [teams, setTeams] = useState<ManagerTeam[]>([]);
+  const [selectedTeam, setSelectedTeam] = useState<ManagerTeam | null>(null);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
 
   // Team Member State (Authorized Scope)
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -113,6 +121,23 @@ function ManagerDashboardContent() {
     }
   }, [router]);
 
+  // Load Manager Teams
+  const loadTeams = useCallback(async () => {
+    try {
+      setIsLoadingTeams(true);
+      const data = await fetchManagerTeams();
+      setTeams(data || []);
+    } catch (err) {
+      console.warn("Failed to load manager teams:", err);
+    } finally {
+      setIsLoadingTeams(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadTeams();
+  }, [loadTeams]);
+
   // Load Authorized Team Members
   const loadTeamMembers = useCallback(async () => {
     try {
@@ -130,21 +155,29 @@ function ManagerDashboardContent() {
     loadTeamMembers();
   }, [loadTeamMembers]);
 
+  // Scoped Team Members
+  const effectiveTeamMembers = React.useMemo(() => {
+    if (!selectedTeam) return teamMembers;
+    return teamMembers.filter((m) => m.batch_id === selectedTeam.id);
+  }, [teamMembers, selectedTeam]);
+
   // Load Workflows
   const loadWorkflows = useCallback(async () => {
     try {
       setIsLoadingWorkflows(true);
-      const res = await fetchWorkflows(1, 100);
+      const res = await fetchWorkflows(1, 100, selectedTeam?.id);
       setWorkflows(res.items || []);
       if (res.items && res.items.length > 0) {
-        setSelectedWorkflow((prev) => prev || res.items[0]);
+        setSelectedWorkflow((prev) => (prev && res.items.some((w) => w.id === prev.id) ? prev : res.items[0]));
+      } else {
+        setSelectedWorkflow(null);
       }
     } catch (err) {
       console.warn("Failed to load workflows:", err);
     } finally {
       setIsLoadingWorkflows(false);
     }
-  }, []);
+  }, [selectedTeam]);
 
   useEffect(() => {
     loadWorkflows();
@@ -380,8 +413,31 @@ function ManagerDashboardContent() {
                   </p>
                 </div>
 
-                <div className="flex items-center gap-3 z-10">
-                  <div className="flex items-center gap-2 bg-surface-container px-3.5 py-2 rounded-xl text-body-sm font-medium border border-outline-variant/50 text-on-surface">
+                <div className="flex flex-wrap items-center gap-3 z-10">
+                  <div className="flex items-center gap-2 bg-surface-container-lowest px-3.5 py-2 rounded-xl text-body-sm font-medium border border-outline-variant/60 text-on-surface shadow-2xs">
+                    <span className="material-symbols-outlined text-primary text-base">groups</span>
+                    <select
+                      value={selectedTeam?.id || "all"}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        if (val === "all") setSelectedTeam(null);
+                        else {
+                          const t = teams.find((item) => item.id === val);
+                          if (t) setSelectedTeam(t);
+                        }
+                      }}
+                      className="bg-transparent text-xs font-semibold text-on-surface focus:outline-none cursor-pointer"
+                    >
+                      <option value="all">All Teams ({teams.length})</option>
+                      {teams.map((t) => (
+                        <option key={t.id} value={t.id}>
+                          {t.name} ({t.member_count} members)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div className="hidden sm:flex items-center gap-2 bg-surface-container px-3.5 py-2 rounded-xl text-body-sm font-medium border border-outline-variant/50 text-on-surface">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                     <span>Active Session</span>
                   </div>
@@ -407,33 +463,41 @@ function ManagerDashboardContent() {
               {/* KPI Summary Cards */}
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Workflows Managed</span>
+                  <span className="text-label-sm text-outline font-medium">Teams Managed</span>
                   <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
-                    {managerScope?.assigned_workflow_ids?.length || 3}
+                    {teams.length}
                   </p>
-                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">Active Projects</p>
+                  <p className="text-[11px] text-primary mt-1 font-medium">
+                    {selectedTeam ? `Selected: ${selectedTeam.name}` : "All Assigned Teams"}
+                  </p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
                   <span className="text-label-sm text-outline font-medium">Team Size</span>
                   <p className="text-headline-sm font-headline font-bold text-on-surface mt-1 truncate">
-                    {managerScope?.assigned_student_ids?.length || 8}
+                    {effectiveTeamMembers.length}
                   </p>
-                  <p className="text-[11px] text-outline mt-1">Direct reports</p>
+                  <p className="text-[11px] text-outline mt-1">
+                    {selectedTeam ? `In ${selectedTeam.name}` : "Across all teams"}
+                  </p>
                 </div>
 
                 <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Pending Reviews</span>
-                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">2</p>
-                  <p className="text-[11px] text-amber-600 mt-1 font-medium">Requires attention</p>
-                </div>
-
-                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
-                  <span className="text-label-sm text-outline font-medium">Evaluation Matrices</span>
+                  <span className="text-label-sm text-outline font-medium">Workflows Managed</span>
                   <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
-                    {evaluation ? `${evaluation.metrics.length} Metrics` : "0 Matrices"}
+                    {workflows.length}
                   </p>
-                  <p className="text-[11px] text-outline mt-1">{selectedTask ? `Task: ${selectedTask.title}` : "Select a task"}</p>
+                  <p className="text-[11px] text-emerald-600 mt-1 font-medium">Active Projects</p>
+                </div>
+
+                <div className="bg-surface-container-lowest p-5 rounded-xl border border-outline-variant/40 shadow-xs">
+                  <span className="text-label-sm text-outline font-medium">Completed Tasks</span>
+                  <p className="text-headline-sm font-headline font-bold text-on-surface mt-1">
+                    {allManagerTasks.filter((t) => t.status === "completed").length}
+                  </p>
+                  <p className="text-[11px] text-outline mt-1">
+                    {allManagerTasks.length > 0 ? `of ${allManagerTasks.length} total tasks` : "No tasks yet"}
+                  </p>
                 </div>
               </div>
 
@@ -441,21 +505,37 @@ function ManagerDashboardContent() {
               <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs p-8">
                 {activeTab === "dashboard" && (
                   <DashboardTab
-                    teamMembers={teamMembers}
+                    teams={teams}
+                    teamMembers={effectiveTeamMembers}
                     workflows={workflows}
-                    tasks={tasks}
+                    tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
                     evaluation={evaluation}
                     onNavigateTab={(tab) => router.push(`/dashboard/manager?tab=${tab}`)}
                   />
                 )}
                 {activeTab === "team" && (
                   <TeamTab
+                    teams={teams}
+                    selectedTeam={selectedTeam}
+                    onSelectTeam={(t) => setSelectedTeam(t)}
+                    onCreateTeam={async (data) => {
+                      await createManagerTeam(data);
+                      await loadTeams();
+                      await loadTeamMembers();
+                    }}
                     teamMembers={teamMembers}
                     isLoading={isLoadingTeam}
-                    onMemberCreated={loadTeamMembers}
                     onAssignTask={(studentId) => {
                       setTaskStudentId(studentId);
                       router.push("/dashboard/manager?tab=progress");
+                    }}
+                    onCreateWorkflowForTeam={(team) => {
+                      setSelectedTeam(team);
+                      router.push("/dashboard/manager?tab=workflows");
+                    }}
+                    onRefreshData={async () => {
+                      await loadTeams();
+                      await loadTeamMembers();
                     }}
                   />
                 )}
@@ -471,6 +551,9 @@ function ManagerDashboardContent() {
                     }}
                     onDeleteWorkflow={handleDeleteWorkflow}
                     onNavigateToProgress={() => router.push("/dashboard/manager?tab=progress")}
+                    teams={teams}
+                    selectedTeam={selectedTeam}
+                    onSelectTeam={(t) => setSelectedTeam(t)}
                   />
                 )}
                 {activeTab === "progress" && (
@@ -480,14 +563,14 @@ function ManagerDashboardContent() {
                     onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
                     tasks={tasks}
                     isLoadingTasks={isLoadingTasks}
-                    teamMembers={teamMembers}
+                    teamMembers={effectiveTeamMembers}
                     selectedTask={selectedTask}
                     onSelectTask={(t) => setSelectedTask(t)}
                     onCreateTask={async (data) => {
                       if (!selectedWorkflow) return;
                       if (data.student_id === "ALL") {
                         await Promise.all(
-                          teamMembers.map((m) =>
+                          effectiveTeamMembers.map((m) =>
                             createWorkflowTask(selectedWorkflow.id, {
                               ...data,
                               student_id: m.id,
@@ -505,6 +588,9 @@ function ManagerDashboardContent() {
                 )}
                 {activeTab === "evaluations" && (
                   <EvaluationsTab
+                    teams={teams}
+                    selectedTeam={selectedTeam}
+                    onSelectTeam={(t) => setSelectedTeam(t)}
                     workflows={workflows}
                     selectedWorkflow={selectedWorkflow}
                     onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
@@ -513,7 +599,7 @@ function ManagerDashboardContent() {
                     onSelectTask={(t) => setSelectedTask(t)}
                     evaluation={evaluation}
                     isLoadingEvaluation={isLoadingEvaluation}
-                    teamMembers={teamMembers}
+                    teamMembers={effectiveTeamMembers}
                     onCreateEvaluation={async (maxScore) => {
                       if (!selectedWorkflow || !selectedTask) return;
                       await createEvaluation(selectedWorkflow.id, selectedTask.id, {
@@ -524,22 +610,38 @@ function ManagerDashboardContent() {
                     }}
                     onDeleteEvaluation={handleDeleteEvaluation}
                     onCreateMetric={async (data) => {
-                      if (!selectedWorkflow || !selectedTask || !evaluation) return;
-                      await createEvaluationMetric(selectedWorkflow.id, selectedTask.id, evaluation.id, data);
+                      if (!selectedWorkflow || !selectedTask) return;
+                      let evalId = evaluation?.id;
+                      if (!evalId) {
+                        const newEval = await createEvaluation(selectedWorkflow.id, selectedTask.id, {
+                          student_id: selectedTask.student_id,
+                          max_score: 100,
+                        });
+                        evalId = newEval.id;
+                      }
+                      await createEvaluationMetric(selectedWorkflow.id, selectedTask.id, evalId, data);
                       await loadEvaluation(selectedWorkflow.id, selectedTask.id);
+                      await loadAllManagerTasks();
                     }}
-                    onDeleteMetric={handleDeleteMetric}
+                    onDeleteMetric={async (metricId) => {
+                      if (!selectedWorkflow || !selectedTask || !evaluation) return;
+                      await deleteEvaluationMetric(selectedWorkflow.id, selectedTask.id, evaluation.id, metricId);
+                      await loadEvaluation(selectedWorkflow.id, selectedTask.id);
+                      await loadAllManagerTasks();
+                    }}
                   />
                 )}
                 {activeTab === "feedback" && (
                   <FeedbackTab
                     tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
-                    teamMembers={teamMembers}
+                    teamMembers={effectiveTeamMembers}
                     evaluation={evaluation}
                   />
                 )}
                 {activeTab === "reports" && (
                   <ReportsTab
+                    teams={teams}
+                    workflows={workflows}
                     tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
                     teamMembers={teamMembers}
                   />
@@ -547,7 +649,7 @@ function ManagerDashboardContent() {
                 {activeTab === "history" && (
                   <HistoryTab
                     tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
-                    teamMembers={teamMembers}
+                    teamMembers={effectiveTeamMembers}
                     evaluation={evaluation}
                   />
                 )}

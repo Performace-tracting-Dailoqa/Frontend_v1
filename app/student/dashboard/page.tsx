@@ -1,6 +1,6 @@
 "use client";
 
-import { getAuthSession, fetchMe, UserSession } from "@/utils/auth";
+import { getAuthSession, getAuthToken, fetchMe, UserSession } from "@/utils/auth";
 import {
   fetchStudentTasks,
   updateStudentTaskStatus,
@@ -135,6 +135,12 @@ export default function StudentDashboardPage() {
   const [isSubmittingGrade, setIsSubmittingGrade] = useState<boolean>(false);
   const [gradeError, setGradeError] = useState<string | null>(null);
 
+  const [cohortContext, setCohortContext] = useState<{
+    batch?: { name?: string; department?: string; start_date?: string; end_date?: string };
+    manager?: { name?: string; email?: string };
+    teacher?: { name?: string; email?: string };
+  } | null>(null);
+
   const loadStudentTasks = async () => {
     try {
       setIsLoadingTasks(true);
@@ -158,7 +164,21 @@ export default function StudentDashboardPage() {
       }
     }).catch(() => {});
     loadStudentTasks();
+
+    const token = getAuthToken();
+    fetch("/api/v1/student/profile/overview", {
+      headers: {
+        Accept: "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+    })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data) setCohortContext(data);
+      })
+      .catch(() => {});
   }, []);
+
 
   const handleOpenGradingModal = (task: StudentTaskItem, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
@@ -330,6 +350,59 @@ export default function StudentDashboardPage() {
           </Magnet>
         </div>
       </div>
+
+      {/* Cohort Batch & Mentor Context (BRD §7.7) */}
+      <div className="bg-gradient-to-r from-indigo-50/70 via-white to-purple-50/70 p-4 sm:p-5 rounded-2xl border border-indigo-100 shadow-2xs flex flex-wrap items-center justify-between gap-4 text-xs">
+        <div className="flex items-center gap-6 flex-wrap">
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-indigo-600/10 text-primary flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined text-lg">school</span>
+            </span>
+            <div>
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-semibold">Cohort Track</span>
+              <strong className="text-slate-900 text-xs">{cohortContext?.batch?.name || "Cohort 2026 / Engineering"}</strong>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-purple-600/10 text-purple-700 flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined text-lg">engineering</span>
+            </span>
+            <div>
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-semibold">Reporting Manager</span>
+              <strong className="text-slate-900 text-xs">{cohortContext?.manager?.name || "Assigned Manager"}</strong>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="w-8 h-8 rounded-xl bg-emerald-600/10 text-emerald-700 flex items-center justify-center font-bold">
+              <span className="material-symbols-outlined text-lg">translate</span>
+            </span>
+            <div>
+              <span className="text-[10px] text-slate-500 uppercase tracking-wider block font-semibold">Japanese &amp; Milestone Sensei</span>
+              <strong className="text-slate-900 text-xs">{cohortContext?.teacher?.name || "Assigned Sensei"}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <Link
+            href="/student/attendance"
+            className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 flex items-center gap-1 shadow-2xs"
+          >
+            <span className="material-symbols-outlined text-sm text-emerald-600">calendar_today</span>
+            <span>My Attendance</span>
+          </Link>
+          <Link
+            href="/student/evaluations"
+            className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 font-semibold hover:bg-slate-50 flex items-center gap-1 shadow-2xs"
+          >
+            <span className="material-symbols-outlined text-sm text-primary">assignment</span>
+            <span>Scorecards</span>
+          </Link>
+        </div>
+      </div>
+
 
       {/* ========================================================= */}
       {/* 4 CORE KPI METRICS                                       */}

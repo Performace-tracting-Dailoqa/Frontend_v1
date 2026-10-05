@@ -234,7 +234,7 @@ export interface ManagerTeam {
 export async function fetchManagerTeams(): Promise<ManagerTeam[]> {
   const res = await fetch("/api/v1/manager/teams", {
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -248,7 +248,7 @@ export async function createManagerTeam(payload: { name: string; department?: st
   const res = await fetch("/api/v1/manager/teams", {
     method: "POST",
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -261,7 +261,7 @@ export async function createManagerTeam(payload: { name: string; department?: st
 export async function fetchAvailableStudents(): Promise<TeamMember[]> {
   const res = await fetch("/api/v1/manager/available-students", {
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -275,7 +275,7 @@ export async function addTeamMembers(teamId: string, studentIds: string[]): Prom
   const res = await fetch(`/api/v1/manager/teams/${teamId}/members`, {
     method: "POST",
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     body: JSON.stringify({ student_ids: studentIds }),
   });
   if (!res.ok) {
@@ -288,7 +288,7 @@ export async function addTeamMembers(teamId: string, studentIds: string[]): Prom
 export async function fetchManagerTeam(): Promise<TeamMember[]> {
   const res = await fetch("/api/v1/manager/team", {
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -337,7 +337,7 @@ export async function fetchStudentTasks(
 
   const res = await fetch(`/api/v1/student/tasks?${params.toString()}`, {
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -364,7 +364,7 @@ export async function updateStudentTaskStatus(
   const res = await fetch(`/api/v1/student/tasks/${taskId}`, {
     method: "PATCH",
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -407,7 +407,7 @@ export interface StudentEvaluationItem {
 export async function fetchStudentEvaluations(): Promise<{ total: number; items: StudentEvaluationItem[] }> {
   const res = await fetch("/api/v1/student/evaluations", {
     headers: getHeaders(),
-    credentials: "same-origin",
+    credentials: "include",
     cache: "no-store",
   });
   if (!res.ok) {

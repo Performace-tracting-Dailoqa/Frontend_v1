@@ -94,7 +94,7 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
   const targetUrl = resolveUrl(url);
   return fetch(targetUrl, {
     ...options,
-    credentials: "same-origin",
+    credentials: "include",
     headers: {
       ...buildHeaders(),
       ...(options.headers || {}),

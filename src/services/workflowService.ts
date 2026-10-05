@@ -76,6 +76,7 @@ export async function fetchWorkflows(page = 1, pageSize = 50, batchId?: string):
   if (batchId && batchId !== "all") params.append("batch_id", batchId);
   const res = await fetch(`/api/v1/manager/workflows?${params.toString()}`, {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -88,6 +89,7 @@ export async function fetchWorkflows(page = 1, pageSize = 50, batchId?: string):
 export async function getWorkflow(workflowId: string): Promise<Workflow> {
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -101,6 +103,7 @@ export async function createWorkflow(payload: { name: string; description?: stri
   const res = await fetch("/api/v1/manager/workflows", {
     method: "POST",
     headers: getHeaders(),
+    credentials: "same-origin",
     body: JSON.stringify({ is_active: true, ...payload }),
   });
   if (!res.ok) {
@@ -114,6 +117,7 @@ export async function updateWorkflow(workflowId: string, payload: Partial<{ name
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
     method: "PUT",
     headers: getHeaders(),
+    credentials: "same-origin",
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -127,6 +131,7 @@ export async function deleteWorkflow(workflowId: string): Promise<void> {
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
     method: "DELETE",
     headers: getHeaders(),
+    credentials: "same-origin",
   });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
@@ -142,6 +147,7 @@ export async function fetchWorkflowTasks(workflowId: string, page = 1, pageSize 
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks?${params.toString()}`, {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -154,6 +160,7 @@ export async function fetchWorkflowTasks(workflowId: string, page = 1, pageSize 
 export async function getWorkflowTask(workflowId: string, taskId: string): Promise<WorkflowTask> {
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`, {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -167,6 +174,7 @@ export async function createWorkflowTask(workflowId: string, payload: { title: s
   const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks`, {
     method: "POST",
     headers: getHeaders(),
+    credentials: "same-origin",
     body: JSON.stringify({ workflow_id: workflowId, status: "pending", ...payload }),
   });
   if (!res.ok) {
@@ -532,6 +540,7 @@ export interface ManagerProgressSummary {
 export async function fetchManagerProgressSummary(): Promise<ManagerProgressSummary> {
   const res = await fetch("/api/v1/manager/progress", {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {
@@ -550,6 +559,7 @@ export async function fetchManagerTasks(
   if (status) params.append("status", status);
   const res = await fetch(`/api/v1/manager/tasks?${params.toString()}`, {
     headers: getHeaders(),
+    credentials: "same-origin",
     cache: "no-store",
   });
   if (!res.ok) {

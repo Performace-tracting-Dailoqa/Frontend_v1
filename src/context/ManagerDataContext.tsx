@@ -37,7 +37,19 @@ const ManagerDataContext = createContext<ManagerDataContextType | undefined>(und
 
 // 1 Hour TTL in Milliseconds (3,600,000 ms)
 const CACHE_TTL_MS = 60 * 60 * 1000;
-const CACHE_STORAGE_KEY = "dailoqa_manager_data_cache_v2";
+
+function getManagerCacheKey(): string {
+  if (typeof window === "undefined") return "dailoqa_mgr_cache_v3";
+  try {
+    const sessionRaw = localStorage.getItem("dailoqa_pms_profile_session") || localStorage.getItem("dailoqa_pms_auth_session");
+    if (sessionRaw) {
+      const parsed = JSON.parse(sessionRaw);
+      const uid = parsed?.user?.id || parsed?.user?.email;
+      if (uid) return `dailoqa_mgr_cache_v3_${uid}`;
+    }
+  } catch {}
+  return "dailoqa_mgr_cache_v3_default";
+}
 
 interface CachedPayload {
   teams: ManagerTeam[];
@@ -64,7 +76,8 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
   const loadFromStorage = useCallback((): CachedPayload | null => {
     if (typeof window === "undefined") return null;
     try {
-      const raw = sessionStorage.getItem(CACHE_STORAGE_KEY);
+      const key = getManagerCacheKey();
+      const raw = sessionStorage.getItem(key);
       if (!raw) return null;
       const parsed: CachedPayload = JSON.parse(raw);
       if (parsed && typeof parsed.lastFetchedAt === "number") {
@@ -80,7 +93,8 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
   const saveToStorage = useCallback((data: CachedPayload) => {
     if (typeof window === "undefined") return;
     try {
-      sessionStorage.setItem(CACHE_STORAGE_KEY, JSON.stringify(data));
+      const key = getManagerCacheKey();
+      sessionStorage.setItem(key, JSON.stringify(data));
     } catch (e) {
       console.warn("Failed to write manager data cache:", e);
     }
@@ -90,12 +104,12 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
   const fetchData = useCallback(
     async (options?: { force?: boolean }) => {
       const isForce = options?.force === true;
-      const token = getAuthToken();
 
       // If forced, clear existing cache
       if (isForce && typeof window !== "undefined") {
         try {
-          sessionStorage.removeItem(CACHE_STORAGE_KEY);
+          const key = getManagerCacheKey();
+          sessionStorage.removeItem(key);
         } catch {}
       }
 
@@ -117,12 +131,6 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
           setIsLoading(false);
           return;
         }
-      }
-
-      // Don't attempt live fetch if token is missing yet
-      if (!token) {
-        setIsLoading(false);
-        return;
       }
 
       // 2. Fetch fresh data from backend

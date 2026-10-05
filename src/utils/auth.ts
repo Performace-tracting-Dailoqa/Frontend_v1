@@ -145,8 +145,7 @@ export function isUserLoggedIn(): boolean {
 export function startMicrosoftLogin(): void {
   if (typeof window === "undefined") return;
   clearAuthSession();
-  const baseUrl = getApiBaseUrl();
-  window.location.href = baseUrl ? `${baseUrl}/api/auth/microsoft` : "/api/auth/microsoft";
+  window.location.href = "/api/auth/microsoft";
 }
 
 export function getLoginErrorMessage(code?: string | null): string {
@@ -228,7 +227,7 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
         Accept: "application/json",
       },
       body: JSON.stringify({ identifier: identifier.trim(), password }),
-      credentials: "include",
+      credentials: "same-origin",
     });
   } catch {
     throw new AuthError("Unable to connect to authentication service. Please check your network or server.", 502, "NETWORK_ERROR");
@@ -253,7 +252,7 @@ export async function fetchMe(): Promise<UserDetail> {
     response = await fetch(url, {
       method: "GET",
       headers: { Accept: "application/json" },
-      credentials: "include",
+      credentials: "same-origin",
     });
   } catch {
     throw new AuthError("Failed to reach server to retrieve profile.", 502, "NETWORK_ERROR");
@@ -284,7 +283,6 @@ export async function apiGetMe(token?: string | null): Promise<UserDetail> {
         Authorization: `Bearer ${token}`,
         Accept: "application/json",
       },
-      credentials: "include",
     });
   } catch {
     throw new AuthError("Failed to reach server to retrieve profile.", 502, "NETWORK_ERROR");
@@ -323,7 +321,7 @@ export async function apiChangePassword(
     response = await fetch(url, {
       method: "POST",
       headers,
-      credentials: "include",
+      credentials: "same-origin",
       body: JSON.stringify({
         new_password: newPassword,
         confirm_password: confirmPassword || newPassword,
@@ -371,7 +369,7 @@ export async function apiLogout(): Promise<void> {
     await fetch(url, {
       method: "POST",
       headers: token ? { Authorization: `Bearer ${token}`, Accept: "application/json" } : { Accept: "application/json" },
-      credentials: "include",
+      credentials: "same-origin",
     });
   } catch {
     // Ignore network errors during logout

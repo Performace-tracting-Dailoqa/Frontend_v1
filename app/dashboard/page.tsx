@@ -5,8 +5,6 @@ import { useRouter } from "next/navigation";
 import {
   getAuthSession,
   fetchMe,
-  apiGetMe,
-  saveAuthSession,
   saveProfileSession,
   apiLogout,
   AuthError,
@@ -22,9 +20,9 @@ type DispatchState = "loading" | "pending-role";
  * users requiring password change to /reset-password,
  * and authenticated users to their specific role dashboard based on /auth/me.
  *
- * Also the landing page after the Microsoft SSO callback — in that case
- * the session is hydrated either from the token query parameter or
- * from the HttpOnly pms_session cookie via GET /api/v1/auth/me.
+ * Also the landing page after the Microsoft SSO callback — in that case no
+ * profile exists in localStorage yet, so the session is hydrated from the
+ * HttpOnly pms_session cookie via GET /api/v1/auth/me.
  */
 export default function DashboardIndex() {
   const router = useRouter();
@@ -41,45 +39,6 @@ export default function DashboardIndex() {
       if (cancelled) return;
       const target = getRoleDashboardPath(roleName);
       router.replace(target);
-    }
-
-    async function hydrateFromToken(token: string) {
-      try {
-        const me = await apiGetMe(token);
-        if (cancelled) return;
-
-        saveAuthSession({
-          token,
-          tokenType: "bearer",
-          mustChangePassword: me.must_change_password,
-          user: me,
-          role: me.role,
-          profile: me.profile || null,
-          scope: me.scope || null,
-          loginAt: new Date().toISOString(),
-        });
-        saveProfileSession(me);
-
-        if (typeof window !== "undefined") {
-          window.history.replaceState({}, document.title, window.location.pathname);
-        }
-
-        if (me.must_change_password) {
-          router.replace("/reset-password?required=true");
-          return;
-        }
-
-        await dispatch(me.role?.name);
-      } catch (err) {
-        if (cancelled) return;
-        if (err instanceof AuthError) {
-          if (err.code === PENDING_ROLE_CODE || err.statusCode === 403) {
-            setState("pending-role");
-            return;
-          }
-        }
-        redirectToLogin();
-      }
     }
 
     async function hydrateFromCookie() {
@@ -106,13 +65,6 @@ export default function DashboardIndex() {
         }
         redirectToLogin();
       }
-    }
-
-    const urlParams = typeof window !== "undefined" ? new URLSearchParams(window.location.search) : null;
-    const tokenFromUrl = urlParams?.get("token");
-    if (tokenFromUrl) {
-      hydrateFromToken(tokenFromUrl);
-      return;
     }
 
     const session = getAuthSession();

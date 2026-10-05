@@ -268,8 +268,7 @@ export default function Sidebar({
                     (!currentTab ||
                       currentTab === "overview" ||
                       currentTab === "dashboard" ||
-                      currentTab === "employees" ||
-                      currentTab === "team");
+                      currentTab === "employees");
                 }
                 return (
                   <div key={item.href} className="relative group">

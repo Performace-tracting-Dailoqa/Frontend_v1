@@ -4,6 +4,7 @@ import React, { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   getAuthSession,
+  clearAuthSession,
   fetchMe,
   saveProfileSession,
   AuthError,
@@ -74,8 +75,32 @@ export default function ProtectedRoute({
     async function resolve() {
       const storedSession = getAuthSession();
       if (storedSession) {
-        handleUser(storedSession);
-        return;
+        // Validate session with backend to ensure access token has not expired
+        try {
+          const me = await fetchMe();
+          if (cancelled) return;
+          saveProfileSession(me);
+          handleUser({
+            ...storedSession,
+            user: me,
+            role: me.role,
+            profile: me.profile || null,
+            scope: me.scope || null,
+          });
+          return;
+        } catch (err) {
+          if (cancelled) return;
+          if (err instanceof AuthError) {
+            if (err.statusCode === 401 || err.statusCode === 403) {
+              clearAuthSession();
+              redirectToLogin();
+              return;
+            }
+          }
+          // In case of transient network error, allow stored session
+          handleUser(storedSession);
+          return;
+        }
       }
 
       // No stored profile — a freshly created cookie session (Microsoft SSO).

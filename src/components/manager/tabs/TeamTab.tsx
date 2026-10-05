@@ -134,15 +134,14 @@ export default function TeamTab({
 
   const departments = Array.from(new Set(teamMembers.map((m) => m.department).filter(Boolean)));
 
-  // Filter members by selected team and search/dept
+  // Filter members across all teams by search/dept
   const filteredMembers = teamMembers.filter((m) => {
-    const matchesTeam = !selectedTeam || m.batch_id === selectedTeam.id;
     const matchesSearch =
       m.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.email.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (m.enrollment_no && m.enrollment_no.toLowerCase().includes(searchQuery.toLowerCase()));
     const matchesDept = departmentFilter === "all" || m.department === departmentFilter;
-    return matchesTeam && matchesSearch && matchesDept;
+    return matchesSearch && matchesDept;
   });
 
   // Filter available students for modal
@@ -175,66 +174,12 @@ export default function TeamTab({
         </button>
       </div>
 
-      {/* Selected Team Actions Banner */}
-      {selectedTeam && (
-        <div className="p-4 bg-primary/10 border border-primary/30 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 animate-fade-in">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary text-white flex items-center justify-center font-bold">
-              <span className="material-symbols-outlined text-xl">groups</span>
-            </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs uppercase font-bold text-primary tracking-wide">Selected Team</span>
-                <span className="px-2 py-0.5 bg-primary/20 text-primary text-xs font-semibold rounded-full">
-                  Length: {selectedTeam.member_count} Members
-                </span>
-              </div>
-              <h4 className="text-base font-bold text-on-surface">{selectedTeam.name}</h4>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 flex-wrap">
-            {onCreateWorkflowForTeam && (
-              <button
-                onClick={() => onCreateWorkflowForTeam(selectedTeam)}
-                className="px-3.5 py-1.5 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-all flex items-center gap-1.5 shadow-xs cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-base">alt_route</span>
-                <span>Create Workflow for {selectedTeam.name}</span>
-              </button>
-            )}
-            <button
-              onClick={(e) => handleOpenAddMembersModal(selectedTeam, e)}
-              className="px-3 py-1.5 bg-surface-container text-on-surface text-xs font-semibold rounded-lg hover:bg-surface-container-high border border-outline-variant/60 transition-all flex items-center gap-1 cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-base">person_add</span>
-              <span>Add Members</span>
-            </button>
-            <button
-              onClick={() => onSelectTeam(null)}
-              className="px-2.5 py-1.5 text-xs text-outline hover:text-on-surface font-semibold flex items-center gap-1 cursor-pointer"
-            >
-              <span>View All</span>
-              <span className="material-symbols-outlined text-sm">close</span>
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Team Distribution Cards */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
           <h4 className="text-sm font-bold uppercase tracking-wider text-outline">
             Your Teams ({teams.length})
           </h4>
-          {selectedTeam && (
-            <button
-              onClick={() => onSelectTeam(null)}
-              className="text-xs text-primary hover:underline font-semibold cursor-pointer flex items-center gap-1"
-            >
-              <span>Show All Teams</span>
-              <span className="material-symbols-outlined text-sm">clear</span>
-            </button>
-          )}
         </div>
 
         {teams.length === 0 ? (
@@ -253,98 +198,113 @@ export default function TeamTab({
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="space-y-3">
             {teams.map((team) => {
               const isSelected = selectedTeam?.id === team.id;
+              const membersInTeam = teamMembers.filter((m) => m.batch_id === team.id);
+              const progressPct = Math.min(100, Math.max(0, team.progress_percentage || 0));
+
               return (
                 <div
                   key={team.id}
-                  onClick={() => onSelectTeam(isSelected ? null : team)}
-                  className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between relative group ${
-                    isSelected
-                      ? "bg-primary/5 border-primary shadow-xs ring-2 ring-primary"
-                      : "bg-surface-container-lowest border-outline-variant/40 hover:border-primary/50 hover:shadow-xs"
-                  }`}
+                  className="p-4 lg:p-5 rounded-2xl border border-slate-200/80 bg-white shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-4"
                 >
-                  <div>
-                    <div className="flex items-center justify-between mb-2">
-                      <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-200 text-[11px] font-semibold rounded-md">
-                        {team.department || "General"}
-                      </span>
-                      <div className="flex items-center gap-1">
-                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 text-[11px] font-semibold rounded-full uppercase">
+                  {/* Left Column: Team Avatar + Name + Badges + Member Previews */}
+                  <div className="flex items-center gap-3.5 min-w-[240px] lg:w-1/4">
+                    <div className="w-11 h-11 rounded-xl bg-indigo-50 text-[#4B2EF5] flex items-center justify-center font-bold text-base shrink-0 shadow-2xs">
+                      {team.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 mb-1 flex-wrap">
+                        <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 border border-indigo-100 text-[10px] font-semibold rounded">
+                          {team.department || "General"}
+                        </span>
+                        <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-100 text-[10px] font-semibold rounded">
                           {team.status || "Active"}
                         </span>
                       </div>
-                    </div>
-
-                    <h4 className="text-base font-bold text-on-surface font-headline mb-1">
-                      {team.name}
-                    </h4>
-
-                    {/* Team Length & Stats mini-grid */}
-                    <div className="grid grid-cols-3 gap-2 py-3 border-y border-outline-variant/20 my-3 text-center bg-surface-container/30 rounded-xl">
-                      <div>
-                        <span className="text-[10px] text-outline uppercase font-semibold block">Team Length</span>
-                        <span className="text-base font-bold text-primary font-mono">{team.member_count}</span>
-                        <span className="text-[10px] text-on-surface-variant block">Members</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-outline uppercase font-semibold block">Workflows</span>
-                        <span className="text-base font-bold text-on-surface font-mono">{team.active_workflows}</span>
-                        <span className="text-[10px] text-on-surface-variant block">Tracks</span>
-                      </div>
-                      <div>
-                        <span className="text-[10px] text-outline uppercase font-semibold block">Tasks</span>
-                        <span className="text-base font-bold text-on-surface font-mono">{team.active_tasks}</span>
-                        <span className="text-[10px] text-on-surface-variant block">Assigned</span>
-                      </div>
-                    </div>
-
-                    {/* Completion rate bar */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="text-outline">Completion</span>
-                        <span className="font-bold text-primary font-mono">{team.progress_percentage}%</span>
-                      </div>
-                      <div className="w-full bg-surface-container h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-primary h-full rounded-full transition-all duration-500"
-                          style={{ width: `${Math.min(100, team.progress_percentage)}%` }}
-                        />
+                      <h4 className="text-sm font-bold text-slate-900 font-headline truncate">
+                        {team.name}
+                      </h4>
+                      <div className="flex items-center gap-1.5 text-[11px] text-slate-500 mt-0.5">
+                        <span>{team.member_count ?? membersInTeam.length} members</span>
+                        {membersInTeam.length > 0 && (
+                          <div className="flex items-center -space-x-1 ml-1">
+                            {membersInTeam.slice(0, 3).map((m, idx) => (
+                              <div
+                                key={m.id || idx}
+                                title={m.name}
+                                className="w-4 h-4 rounded-full bg-indigo-100 text-[#4B2EF5] text-[8px] font-bold flex items-center justify-center uppercase border border-white"
+                              >
+                                {m.name.charAt(0)}
+                              </div>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </div>
 
-                  {/* Actions on Card */}
-                  <div className="mt-4 pt-3 border-t border-outline-variant/20 flex items-center justify-between text-xs gap-2">
-                    <button
-                      onClick={(e) => handleOpenAddMembersModal(team, e)}
-                      className="text-xs text-primary hover:underline font-semibold flex items-center gap-1 cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-sm">person_add</span>
-                      <span>+ Member</span>
-                    </button>
+                  {/* Middle Column: Metrics Grid */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 lg:w-2/5 border-t lg:border-t-0 lg:border-l lg:border-r border-slate-100 pt-2 lg:pt-0 lg:px-4">
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Team Length</span>
+                      <span className="text-sm font-bold text-slate-900 font-mono">{team.member_count}</span>
+                      <span className="text-[10px] text-slate-400 block">Members</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Workflows</span>
+                      <span className="text-sm font-bold text-slate-900 font-mono">{team.active_workflows}</span>
+                      <span className="text-[10px] text-slate-400 block">Tracks</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Tasks</span>
+                      <span className="text-sm font-bold text-slate-900 font-mono">{team.active_tasks}</span>
+                      <span className="text-[10px] text-slate-400 block">Assigned</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-slate-400 block uppercase font-medium">Pending Eval</span>
+                      <span className="text-sm font-bold text-amber-600 font-mono">{team.evaluations_pending}</span>
+                      <span className="text-[10px] text-slate-400 block">Awaiting</span>
+                    </div>
+                  </div>
 
-                    <div className="flex items-center gap-1">
+                  {/* Right Column: Progress Bar & Actions */}
+                  <div className="flex flex-col sm:flex-row lg:flex-row items-start sm:items-center justify-between lg:justify-end gap-3 lg:w-1/3 border-t lg:border-t-0 border-slate-100 pt-2 lg:pt-0">
+                    <div className="w-full sm:w-32 lg:w-32 space-y-1">
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-[10px] text-slate-400">Completion</span>
+                        <span className="font-bold text-[#4B2EF5] font-mono text-[11px]">{progressPct}%</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className="bg-[#4B2EF5] h-full rounded-full transition-all duration-500"
+                          style={{ width: `${progressPct}%` }}
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        onClick={(e) => handleOpenAddMembersModal(team, e)}
+                        className="px-2.5 py-1.5 bg-slate-50 hover:bg-slate-100 text-slate-700 text-xs font-semibold rounded-lg border border-slate-200 transition-colors flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-sm">person_add</span>
+                        <span>+ Member</span>
+                      </button>
+
                       {onCreateWorkflowForTeam && (
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
                             onCreateWorkflowForTeam(team);
                           }}
-                          className="px-2 py-1 bg-primary/10 hover:bg-primary/20 text-primary rounded-md font-semibold text-[11px] flex items-center gap-0.5 cursor-pointer"
+                          className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-[#4B2EF5] rounded-lg font-semibold text-xs flex items-center gap-1 cursor-pointer transition-colors"
                         >
-                          <span className="material-symbols-outlined text-xs">alt_route</span>
+                          <span className="material-symbols-outlined text-sm">alt_route</span>
                           <span>+ Workflow</span>
                         </button>
                       )}
-                      <span className="text-primary font-semibold flex items-center gap-0.5 ml-1">
-                        <span>{isSelected ? "Selected" : "Select"}</span>
-                        <span className="material-symbols-outlined text-sm">
-                          {isSelected ? "check_circle" : "chevron_right"}
-                        </span>
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -362,7 +322,7 @@ export default function TeamTab({
           </span>
           <input
             type="text"
-            placeholder={`Search ${selectedTeam ? selectedTeam.name : "all"} learners by name, email, or ID...`}
+            placeholder="Search all learners by name, email, or ID..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             className="w-full pl-9 pr-4 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 focus:outline-none focus:border-primary text-on-surface"
@@ -408,13 +368,11 @@ export default function TeamTab({
         <div className="bg-surface-container-lowest rounded-2xl border border-outline-variant/40 shadow-xs overflow-hidden">
           <div className="px-5 py-3.5 bg-surface-container/40 border-b border-outline-variant/30 flex items-center justify-between">
             <h4 className="text-xs font-bold uppercase tracking-wider text-outline">
-              Member Roster {selectedTeam ? `— ${selectedTeam.name}` : "— All Teams"} ({filteredMembers.length})
+              Member Roster — All Teams ({filteredMembers.length})
             </h4>
-            {selectedTeam && (
-              <span className="text-xs font-semibold text-primary">
-                Filtered by: {selectedTeam.name} ({selectedTeam.member_count} total length)
-              </span>
-            )}
+            <span className="text-xs font-semibold text-slate-500">
+              Total {filteredMembers.length} learners
+            </span>
           </div>
           <div className="overflow-x-auto">
             <table className="w-full text-left text-body-sm">
@@ -423,58 +381,65 @@ export default function TeamTab({
                   <th className="px-5 py-3.5">Learner / Employee</th>
                   <th className="px-5 py-3.5">Enrollment No</th>
                   <th className="px-5 py-3.5">Department</th>
-                  <th className="px-5 py-3.5">Batch / Cohort</th>
+                  <th className="px-5 py-3.5">Assigned Team / Batch</th>
                   <th className="px-5 py-3.5">Status</th>
                   <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/20">
-                {filteredMembers.map((member) => (
-                  <tr key={member.id} className="hover:bg-surface-container/50 transition-colors">
-                    <td className="px-5 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
-                          {member.name.charAt(0).toUpperCase()}
+                {filteredMembers.map((member) => {
+                  const teamName =
+                    member.batch_name ||
+                    teams.find((t) => t.id === member.batch_id)?.name ||
+                    "Assigned Team";
+
+                  return (
+                    <tr key={member.id} className="hover:bg-surface-container/50 transition-colors">
+                      <td className="px-5 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-9 h-9 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
+                            {member.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-semibold text-on-surface">{member.name}</div>
+                            <div className="text-xs text-on-surface-variant">{member.email}</div>
+                          </div>
                         </div>
-                        <div>
-                          <div className="font-semibold text-on-surface">{member.name}</div>
-                          <div className="text-xs text-on-surface-variant">{member.email}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-5 py-4 font-mono text-xs text-on-surface-variant">
-                      {member.enrollment_no || "—"}
-                    </td>
-                    <td className="px-5 py-4 text-on-surface">
-                      {member.department || "General"}
-                    </td>
-                    <td className="px-5 py-4">
-                      <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
-                        {member.batch_name || "Assigned Team"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4">
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
-                          member.status?.toLowerCase() === "active"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-slate-100 text-slate-700 border border-slate-200"
-                        }`}
-                      >
-                        {member.status || "Active"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-4 text-right">
-                      <button
-                        onClick={() => onAssignTask(member.id)}
-                        className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
-                      >
-                        <span className="material-symbols-outlined text-sm">add_task</span>
-                        <span>Assign Task</span>
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                      <td className="px-5 py-4 font-mono text-xs text-on-surface-variant">
+                        {member.enrollment_no || "—"}
+                      </td>
+                      <td className="px-5 py-4 text-on-surface">
+                        {member.department || "General"}
+                      </td>
+                      <td className="px-5 py-4">
+                        <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-100 text-indigo-700 rounded-full text-xs font-semibold">
+                          {teamName}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-semibold ${
+                            member.status?.toLowerCase() === "active"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-slate-100 text-slate-700 border border-slate-200"
+                          }`}
+                        >
+                          {member.status || "Active"}
+                        </span>
+                      </td>
+                      <td className="px-5 py-4 text-right">
+                        <button
+                          onClick={() => onAssignTask(member.id)}
+                          className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold rounded-lg transition-all cursor-pointer inline-flex items-center gap-1"
+                        >
+                          <span className="material-symbols-outlined text-sm">add_task</span>
+                          <span>Assign Task</span>
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>

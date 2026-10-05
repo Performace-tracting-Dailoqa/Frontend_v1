@@ -69,6 +69,21 @@ export interface ApiFetchOptions extends RequestInit {
   bypassCache?: boolean;
 }
 
+function resolveUrl(url: string): string {
+  if (typeof window !== "undefined" || !url.startsWith("/")) {
+    return url;
+  }
+  const base = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:8000"
+  ).trim().replace(/\/$/, "");
+  if (base.endsWith("/api") && url.startsWith("/api/")) {
+    return `${base}${url.slice(4)}`;
+  }
+  return `${base}${url}`;
+}
+
 /**
  * Authenticated same-origin fetch against the PMS API.
  *
@@ -76,7 +91,8 @@ export interface ApiFetchOptions extends RequestInit {
  * so credentials stay same-origin and CORS never applies.
  */
 export async function apiFetch(url: string, options: ApiFetchOptions = {}): Promise<Response> {
-  return fetch(url, {
+  const targetUrl = resolveUrl(url);
+  return fetch(targetUrl, {
     ...options,
     credentials: "same-origin",
     headers: {

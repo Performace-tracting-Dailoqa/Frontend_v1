@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useState } from "react";
-import { Workflow, ManagerTeam } from "@/services/workflowService";
+import { Workflow, ManagerTeam, WorkflowTask, TeamMember } from "@/services/workflowService";
+import WorkflowTasksView from "./WorkflowTasksView";
 
 interface WorkflowsTabProps {
   workflows: Workflow[];
@@ -10,10 +11,22 @@ interface WorkflowsTabProps {
   onSelectWorkflow: (wf: Workflow) => void;
   onCreateWorkflow: (data: { name: string; description?: string; batch_id?: string }) => Promise<void>;
   onDeleteWorkflow: (id: string) => Promise<void>;
-  onNavigateToProgress: () => void;
+  onNavigateToProgress?: () => void;
   teams?: ManagerTeam[];
   selectedTeam?: ManagerTeam | null;
   onSelectTeam?: (team: ManagerTeam | null) => void;
+  tasks?: WorkflowTask[];
+  isLoadingTasks?: boolean;
+  teamMembers?: TeamMember[];
+  onCreateTask?: (data: {
+    title: string;
+    description?: string;
+    student_id: string;
+    due_date?: string;
+    priority?: string;
+  }) => Promise<void>;
+  onDeleteTask?: (taskId: string) => Promise<void>;
+  onNavigateToEvaluations?: (workflow: Workflow, task?: WorkflowTask) => void;
 }
 
 export default function WorkflowsTab({
@@ -23,17 +36,32 @@ export default function WorkflowsTab({
   onSelectWorkflow,
   onCreateWorkflow,
   onDeleteWorkflow,
-  onNavigateToProgress,
   teams = [],
   selectedTeam = null,
   onSelectTeam,
+  tasks = [],
+  isLoadingTasks = false,
+  teamMembers = [],
+  onCreateTask,
+  onDeleteTask,
+  onNavigateToEvaluations,
 }: WorkflowsTabProps) {
+  // Active workflow being viewed in detail/tasks page
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+
+  // Workflow Creation Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [name, setName] = useState("");
   const [description, setDescription] = useState("");
   const [batchId, setBatchId] = useState(selectedTeam?.id || "");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Find currently opened workflow object
+  const activeWorkflow = React.useMemo(() => {
+    if (!activeWorkflowId) return null;
+    return workflows.find((w) => w.id === activeWorkflowId) || null;
+  }, [activeWorkflowId, workflows]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -56,13 +84,45 @@ export default function WorkflowsTab({
     }
   };
 
+  // If a specific workflow tasks page is open, render WorkflowTasksView
+  if (activeWorkflow) {
+    return (
+      <WorkflowTasksView
+        workflow={activeWorkflow}
+        tasks={tasks}
+        isLoadingTasks={isLoadingTasks}
+        teams={teams}
+        teamMembers={teamMembers}
+        onBack={() => setActiveWorkflowId(null)}
+        onCreateTask={
+          onCreateTask ||
+          (async () => {
+            console.warn("onCreateTask handler not provided");
+          })
+        }
+        onDeleteTask={
+          onDeleteTask ||
+          (async () => {
+            console.warn("onDeleteTask handler not provided");
+          })
+        }
+        onNavigateToEvaluations={onNavigateToEvaluations}
+        onDeleteWorkflow={async (id) => {
+          await onDeleteWorkflow(id);
+          setActiveWorkflowId(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
+      {/* Top Header & Team Filter */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h3 className="text-title-lg font-headline font-bold text-on-surface">Workflows &amp; Projects</h3>
           <p className="text-body-sm text-on-surface-variant">
-            Create structured operational or milestone tracks linked directly to your managed teams.
+            Create structured operational tracks and manage task assignments for your assigned teams.
           </p>
         </div>
         <div className="flex items-center gap-3 self-start sm:self-auto">
@@ -125,6 +185,9 @@ export default function WorkflowsTab({
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
           {workflows.map((wf) => {
             const isSelected = selectedWorkflow?.id === wf.id;
+            const assignedTeam = teams.find((t) => t.id === wf.batch_id);
+            const displayBatchName = wf.batch_name || assignedTeam?.name || (wf.batch_id ? "Assigned Cohort" : "General Track");
+
             return (
               <div
                 key={wf.id}
@@ -137,8 +200,9 @@ export default function WorkflowsTab({
                 <div>
                   <div className="flex items-center justify-between mb-3">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-md">
-                        {wf.batch_name || "Team Track"}
+                      <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-md flex items-center gap-1">
+                        <span className="material-symbols-outlined text-xs">groups</span>
+                        <span>{displayBatchName}</span>
                       </span>
                       <span className="px-2 py-0.5 bg-slate-100 text-slate-700 text-xs font-semibold rounded-full uppercase tracking-wider">
                         {wf.status || "Active"}
@@ -166,11 +230,12 @@ export default function WorkflowsTab({
                     <button
                       onClick={() => {
                         onSelectWorkflow(wf);
-                        onNavigateToProgress();
+                        setActiveWorkflowId(wf.id);
                       }}
-                      className="px-3 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer"
+                      className="px-3.5 py-1.5 bg-primary text-white rounded-lg text-xs font-semibold hover:bg-primary/90 transition-all cursor-pointer flex items-center gap-1 shadow-xs"
                     >
-                      Open Tasks →
+                      <span>Open Tasks</span>
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
                     </button>
                   </div>
                 </div>

@@ -1,11 +1,13 @@
 "use client";
 
-import React, { useState, useEffect, useMemo } from "react";
-import { Workflow, WorkflowTask, TeamMember, ManagerTeam } from "@/services/workflowService";
+import React, { useState, useEffect, useMemo, useSyncExternalStore } from "react";
+import { LineChart } from "@mui/x-charts/LineChart";
+import { Workflow, WorkflowTask, TeamMember, ManagerTeam, fetchWorkflowTasks } from "@/services/workflowService";
 import {
   WorkflowEvaluation,
   MetricSubmissionInput,
   submitTaskEvaluation,
+  fetchTaskEvaluation,
 } from "@/services/evaluationService";
 
 interface EvaluationsTabProps {
@@ -43,61 +45,81 @@ interface MetricRowState {
   manager_remarks?: string;
 }
 
+interface GeneralCompetencyMetric {
+  name: string;
+  score: number;
+  maxScore: number;
+  category: string;
+}
+
+interface SavedGeneralEvaluation {
+  overallRating: number;
+  performanceLevel: string;
+  summaryFeedback: string;
+  strengths: string;
+  areasOfGrowth: string;
+  competencies: GeneralCompetencyMetric[];
+  evaluationDate: string;
+  evaluatedAt: string;
+}
+
+const DEFAULT_COMPETENCIES: GeneralCompetencyMetric[] = [
+  { name: "Technical Execution & Problem Solving", score: 85, maxScore: 100, category: "Core Technical" },
+  { name: "Code Quality & Architecture Standards", score: 80, maxScore: 100, category: "Engineering" },
+  { name: "Milestone Delivery & Ownership", score: 90, maxScore: 100, category: "Execution" },
+  { name: "Communication & Team Collaboration", score: 85, maxScore: 100, category: "Behavioral" },
+  { name: "Punctuality & Professional Discipline", score: 95, maxScore: 100, category: "Professionalism" },
+];
+
+const TEAM_COLORS = ["#6366F1", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#3B82F6", "#14B8A6"];
+
+const getTodayString = () => new Date().toISOString().split("T")[0];
+
 export default function EvaluationsTab({
   teams = [],
-  selectedTeam,
-  onSelectTeam,
-  workflows,
-  selectedWorkflow,
-  onSelectWorkflow,
-  tasks,
-  selectedTask,
-  onSelectTask,
-  evaluation,
-  isLoadingEvaluation,
-  teamMembers,
+  workflows = [],
+  tasks = [],
+  teamMembers = [],
   onCreateMetric,
-  onDeleteMetric,
 }: EvaluationsTabProps) {
-  const [activeTeamId, setActiveTeamId] = useState<string>(selectedTeam?.id || "");
-  const [selectedTaskTitle, setSelectedTaskTitle] = useState<string>("");
+  const isMounted = useSyncExternalStore(
+    () => () => {},
+    () => true,
+    () => false
+  );
 
-  useEffect(() => {
-    if (selectedTeam) {
-      setActiveTeamId(selectedTeam.id);
-    }
-  }, [selectedTeam]);
+  // ---------------------------------------------------------------------------
+  // 3-Level Drilldown Navigation State
+  // Level 1: All Teams Overview (selectedTeamForEval === null)
+  // Level 2: Team Members List (selectedTeamForEval !== null && selectedPersonForEval === null)
+  // Level 3: Person Evaluation View (selectedPersonForEval !== null)
+  // ---------------------------------------------------------------------------
+  const [selectedTeamForEval, setSelectedTeamForEval] = useState<ManagerTeam | null>(null);
+  const [selectedPersonForEval, setSelectedPersonForEval] = useState<TeamMember | null>(null);
 
-  useEffect(() => {
-    if (selectedTask) {
-      setSelectedTaskTitle(selectedTask.title);
-    }
-  }, [selectedTask]);
+  // Search Filters
+  const [memberSearchQuery, setMemberSearchQuery] = useState("");
 
-  // Filter workflows by selected team
-  const availableWorkflows = useMemo(() => {
-    if (!activeTeamId) return workflows;
-    return workflows.filter((w) => w.batch_id === activeTeamId);
-  }, [workflows, activeTeamId]);
+  // Level 3 Sub-tab: "general" | "workflows"
+  const [personEvalTab, setPersonEvalTab] = useState<"general" | "workflows">("general");
 
-  // Distinct task titles in current workflow
-  const distinctTaskTitles = useMemo(() => {
-    return Array.from(new Set(tasks.map((t) => t.title)));
-  }, [tasks]);
+  // Selected Workflow & Task in Level 3
+  const [activeWorkflowId, setActiveWorkflowId] = useState<string | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+  const [workflowTasks, setWorkflowTasks] = useState<WorkflowTask[]>([]);
+  const [isLoadingWfTasks, setIsLoadingWfTasks] = useState(false);
 
-  // Tasks for current workflow and selected title
-  const currentTitleTasks = useMemo(() => {
-    if (!selectedTaskTitle) return tasks;
-    return tasks.filter((t) => t.title === selectedTaskTitle);
-  }, [tasks, selectedTaskTitle]);
-
+  // Workflow Task Evaluation State & Date
+  const [workflowEvalDate, setWorkflowEvalDate] = useState<string>(getTodayString());
+  const [taskEval, setTaskEval] = useState<WorkflowEvaluation | null>(null);
+  const [isLoadingTaskEval, setIsLoadingTaskEval] = useState(false);
   const [metricRows, setMetricRows] = useState<MetricRowState[]>([]);
   const [managerRemarks, setManagerRemarks] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submissionSuccess, setSubmissionSuccess] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [isSubmittingEval, setIsSubmittingEval] = useState(false);
+  const [evalSuccess, setEvalSuccess] = useState(false);
+  const [evalError, setEvalError] = useState<string | null>(null);
 
-  // Add Metric Modal State
+  // Add Custom Metric Modal
   const [isAddMetricOpen, setIsAddMetricOpen] = useState(false);
   const [newMetricName, setNewMetricName] = useState("");
   const [newMetricFullScore, setNewMetricFullScore] = useState("25");
@@ -105,731 +127,1355 @@ export default function EvaluationsTab({
   const [newMetricDesc, setNewMetricDesc] = useState("");
   const [isAddingMetric, setIsAddingMetric] = useState(false);
 
-  // Sync metric rows whenever selectedTask or evaluation changes
+  // ---------------------------------------------------------------------------
+  // General Evaluations Form State & Date for Selected Person
+  // ---------------------------------------------------------------------------
+  const [generalEvalDate, setGeneralEvalDate] = useState<string>(getTodayString());
+  const [generalOverallRating, setGeneralOverallRating] = useState<number>(85);
+  const [generalPerformanceLevel, setGeneralPerformanceLevel] = useState<string>("Meets Expectations");
+  const [generalSummaryFeedback, setGeneralSummaryFeedback] = useState<string>("");
+  const [generalStrengths, setGeneralStrengths] = useState<string>("");
+  const [generalAreasOfGrowth, setGeneralAreasOfGrowth] = useState<string>("");
+  const [generalCompetencies, setGeneralCompetencies] = useState<GeneralCompetencyMetric[]>(DEFAULT_COMPETENCIES);
+  const [isSavingGeneral, setIsSavingGeneral] = useState(false);
+  const [generalSavedSuccess, setGeneralSavedSuccess] = useState(false);
+  const [pastGeneralEvals, setPastGeneralEvals] = useState<SavedGeneralEvaluation[]>([]);
+
+  // Load Saved General Evaluation for Person
   useEffect(() => {
-    if (!selectedTask) {
-      setMetricRows([]);
-      setManagerRemarks("");
-      return;
-    }
-
-    const studentMetricMap = new Map<string, { score: number; remarks?: string }>();
-    if (selectedTask.student_metric_grades && Array.isArray(selectedTask.student_metric_grades)) {
-      selectedTask.student_metric_grades.forEach((sm) => {
-        studentMetricMap.set(sm.metric_name.toLowerCase(), {
-          score: Number(sm.score) || 0,
-          remarks: sm.remarks,
-        });
-      });
-    }
-
-    let rows: MetricRowState[] = [];
-
-    if (evaluation?.metrics && evaluation.metrics.length > 0) {
-      rows = evaluation.metrics.map((m) => {
-        const studentInfo = studentMetricMap.get(m.name.toLowerCase());
-        const studentScore = studentInfo ? studentInfo.score : (m.student_score ?? 0);
-        const managerScore = m.score !== null && m.score !== undefined ? Number(m.score) : 0;
-        return {
-          id: m.id,
-          name: m.name,
-          student_score: studentScore,
-          manager_score: managerScore,
-          full_score: Number(m.full_score) || 25,
-          weightage: Number(m.weightage) || 0.25,
-          student_remarks: studentInfo?.remarks || m.student_remarks || undefined,
-          manager_remarks: m.remarks || undefined,
-        };
-      });
-    } else if (selectedTask.student_metric_grades && selectedTask.student_metric_grades.length > 0) {
-      rows = selectedTask.student_metric_grades.map((sm) => {
-        const studentScore = Number(sm.score) || 0;
-        return {
-          name: sm.metric_name,
-          student_score: studentScore,
-          manager_score: 0,
-          full_score: Number(sm.full_score) || 25,
-          weightage: 0.25,
-          student_remarks: sm.remarks || undefined,
-          manager_remarks: "",
-        };
-      });
-    } else {
-      rows = [];
-    }
-
-    setMetricRows(rows);
-    setManagerRemarks(evaluation?.remarks || "");
-    setSubmissionSuccess(false);
-    setError(null);
-  }, [selectedTask, evaluation]);
-
-  // Live Auto-Calculated Totals
-  const totalStudentScore = useMemo(
-    () => metricRows.reduce((acc, r) => acc + (Number(r.student_score) || 0), 0),
-    [metricRows]
-  );
-
-  const totalManagerScore = useMemo(
-    () => metricRows.reduce((acc, r) => acc + (Number(r.manager_score) || 0), 0),
-    [metricRows]
-  );
-
-  const totalMaxScore = useMemo(
-    () => metricRows.reduce((acc, r) => acc + (Number(r.full_score) || 25), 0),
-    [metricRows]
-  );
-
-  const managerPercentage = totalMaxScore > 0 ? Math.round((totalManagerScore / totalMaxScore) * 100) : 0;
-
-  const handleManagerScoreChange = (idx: number, val: number) => {
-    setMetricRows((prev) =>
-      prev.map((row, i) => {
-        if (i !== idx) return row;
-        const clamped = Math.max(0, Math.min(row.full_score, val));
-        return { ...row, manager_score: clamped };
-      })
-    );
-  };
-
-  const handleManagerRemarksChange = (idx: number, text: string) => {
-    setMetricRows((prev) =>
-      prev.map((row, i) => (i === idx ? { ...row, manager_remarks: text } : row))
-    );
-  };
-
-  const handleAddMetricSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newMetricName.trim() || !onCreateMetric) return;
-
-    setIsAddingMetric(true);
-    setError(null);
+    if (!selectedPersonForEval) return;
     try {
-      await onCreateMetric({
-        name: newMetricName.trim(),
-        full_score: Number(newMetricFullScore) || 25,
-        weightage: Number(newMetricWeightage) || 0.25,
-        description: newMetricDesc.trim() || undefined,
-      });
-      setNewMetricName("");
-      setNewMetricDesc("");
-      setIsAddMetricOpen(false);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to add evaluation metric");
-    } finally {
-      setIsAddingMetric(false);
-    }
-  };
-
-  const handleDeleteMetric = async (row: MetricRowState, idx: number) => {
-    if (row.id && onDeleteMetric) {
-      try {
-        await onDeleteMetric(row.id);
-      } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Failed to delete metric");
+      const historyKey = `manager_general_eval_history_${selectedPersonForEval.id}`;
+      const historyStr = typeof window !== "undefined" ? localStorage.getItem(historyKey) : null;
+      let historyList: SavedGeneralEvaluation[] = [];
+      if (historyStr) {
+        historyList = JSON.parse(historyStr);
+        setPastGeneralEvals(historyList);
+      } else {
+        setPastGeneralEvals([]);
       }
-    } else {
-      setMetricRows((prev) => prev.filter((_, i) => i !== idx));
+
+      // Latest or default
+      const key = `manager_general_eval_${selectedPersonForEval.id}`;
+      const savedStr = typeof window !== "undefined" ? localStorage.getItem(key) : null;
+      if (savedStr) {
+        const parsed: SavedGeneralEvaluation = JSON.parse(savedStr);
+        setGeneralOverallRating(parsed.overallRating ?? 85);
+        setGeneralPerformanceLevel(parsed.performanceLevel ?? "Meets Expectations");
+        setGeneralSummaryFeedback(parsed.summaryFeedback ?? "");
+        setGeneralStrengths(parsed.strengths ?? "");
+        setGeneralAreasOfGrowth(parsed.areasOfGrowth ?? "");
+        setGeneralCompetencies(parsed.competencies?.length ? parsed.competencies : DEFAULT_COMPETENCIES);
+        setGeneralEvalDate(parsed.evaluationDate || getTodayString());
+      } else {
+        setGeneralOverallRating(85);
+        setGeneralPerformanceLevel("Meets Expectations");
+        setGeneralSummaryFeedback("");
+        setGeneralStrengths("");
+        setGeneralAreasOfGrowth("");
+        setGeneralCompetencies(DEFAULT_COMPETENCIES);
+        setGeneralEvalDate(getTodayString());
+      }
+    } catch {
+      setGeneralCompetencies(DEFAULT_COMPETENCIES);
+    }
+    setGeneralSavedSuccess(false);
+  }, [selectedPersonForEval]);
+
+  const handleSaveGeneralEvaluation = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPersonForEval) return;
+    setIsSavingGeneral(true);
+    try {
+      const payload: SavedGeneralEvaluation = {
+        overallRating: generalOverallRating,
+        performanceLevel: generalPerformanceLevel,
+        summaryFeedback: generalSummaryFeedback,
+        strengths: generalStrengths,
+        areasOfGrowth: generalAreasOfGrowth,
+        competencies: generalCompetencies,
+        evaluationDate: generalEvalDate,
+        evaluatedAt: new Date().toISOString(),
+      };
+      if (typeof window !== "undefined") {
+        // Save latest
+        localStorage.setItem(`manager_general_eval_${selectedPersonForEval.id}`, JSON.stringify(payload));
+        // Append to history
+        const historyKey = `manager_general_eval_history_${selectedPersonForEval.id}`;
+        const existing = pastGeneralEvals.filter((p) => p.evaluationDate !== generalEvalDate);
+        const updatedHistory = [payload, ...existing];
+        localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
+        setPastGeneralEvals(updatedHistory);
+      }
+      setGeneralSavedSuccess(true);
+      setTimeout(() => setGeneralSavedSuccess(false), 4000);
+    } finally {
+      setIsSavingGeneral(false);
     }
   };
 
-  const handleSubmitEvaluation = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!selectedWorkflow || !selectedTask) return;
-
-    if (metricRows.length === 0) {
-      setError("Please add at least one evaluation metric before submitting.");
+  // ---------------------------------------------------------------------------
+  // Load Workflow Tasks when activeWorkflowId changes in Level 3
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!activeWorkflowId) {
+      setWorkflowTasks([]);
+      setActiveTaskId(null);
       return;
     }
+    let isCancelled = false;
+    setIsLoadingWfTasks(true);
+    fetchWorkflowTasks(activeWorkflowId, 1, 100)
+      .then((res) => {
+        if (!isCancelled) {
+          const items = res.items || [];
+          const personTasks = selectedPersonForEval
+            ? items.filter((t) => t.student_id === selectedPersonForEval.id)
+            : items;
+          setWorkflowTasks(personTasks.length > 0 ? personTasks : items);
+          if (personTasks.length > 0) {
+            setActiveTaskId(personTasks[0].id);
+          } else if (items.length > 0) {
+            setActiveTaskId(items[0].id);
+          } else {
+            setActiveTaskId(null);
+          }
+        }
+      })
+      .catch((err) => console.warn("Failed to load workflow tasks for eval:", err))
+      .finally(() => {
+        if (!isCancelled) setIsLoadingWfTasks(false);
+      });
 
-    setIsSubmitting(true);
-    setError(null);
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeWorkflowId, selectedPersonForEval]);
+
+  // ---------------------------------------------------------------------------
+  // Load Task Evaluation when activeTaskId changes
+  // ---------------------------------------------------------------------------
+  useEffect(() => {
+    if (!activeWorkflowId || !activeTaskId) {
+      setTaskEval(null);
+      setMetricRows([]);
+      return;
+    }
+    let isCancelled = false;
+    setIsLoadingTaskEval(true);
+    fetchTaskEvaluation(activeWorkflowId, activeTaskId)
+      .then((ev) => {
+        if (!isCancelled) {
+          setTaskEval(ev);
+          const currentTask = workflowTasks.find((t) => t.id === activeTaskId);
+          if (ev?.evaluated_at) {
+            setWorkflowEvalDate(ev.evaluated_at.split("T")[0]);
+          } else {
+            setWorkflowEvalDate(getTodayString());
+          }
+
+          if (ev?.metrics && ev.metrics.length > 0) {
+            setMetricRows(
+              ev.metrics.map((m) => ({
+                id: m.id,
+                name: m.name,
+                student_score: m.student_score ?? 0,
+                manager_score: m.score !== null && m.score !== undefined ? Number(m.score) : 0,
+                full_score: Number(m.full_score) || 25,
+                weightage: Number(m.weightage) || 0.25,
+                student_remarks: m.student_remarks || undefined,
+                manager_remarks: m.remarks || undefined,
+              }))
+            );
+            setManagerRemarks(ev.remarks || "");
+          } else if (currentTask?.student_metric_grades && currentTask.student_metric_grades.length > 0) {
+            setMetricRows(
+              currentTask.student_metric_grades.map((sm) => ({
+                name: sm.metric_name,
+                student_score: Number(sm.score) || 0,
+                manager_score: 0,
+                full_score: Number(sm.full_score) || 25,
+                weightage: 0.25,
+                student_remarks: sm.remarks || undefined,
+                manager_remarks: "",
+              }))
+            );
+            setManagerRemarks("");
+          } else {
+            // Default 4-part Rubric
+            setMetricRows([
+              { name: "Code Architecture & Modularity", student_score: 20, manager_score: 22, full_score: 25, weightage: 0.25 },
+              { name: "Implementation Completeness & Quality", student_score: 22, manager_score: 24, full_score: 25, weightage: 0.25 },
+              { name: "Unit & Integration Testing", student_score: 18, manager_score: 20, full_score: 25, weightage: 0.25 },
+              { name: "Documentation & Clean Code", student_score: 20, manager_score: 23, full_score: 25, weightage: 0.25 },
+            ]);
+            setManagerRemarks("");
+          }
+        }
+      })
+      .catch((err) => console.warn("Failed to load evaluation for task:", err))
+      .finally(() => {
+        if (!isCancelled) setIsLoadingTaskEval(false);
+      });
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [activeWorkflowId, activeTaskId, workflowTasks]);
+
+  // ---------------------------------------------------------------------------
+  // Calculations for Performance Line Graph (Level 1)
+  // ---------------------------------------------------------------------------
+  const performanceDays = ["Day 1", "Day 2", "Day 3", "Day 4", "Day 5", "Day 6", "Day 7"];
+
+  const teamLineSeries = useMemo(() => {
+    if (!teams || teams.length === 0) return [];
+    return teams.map((team, idx) => {
+      const color = TEAM_COLORS[idx % TEAM_COLORS.length];
+      const teamTasks = tasks.filter((t) => {
+        const student = teamMembers.find((m) => m.id === t.student_id);
+        return student?.batch_id === team.id;
+      });
+      const graded = teamTasks.filter((t) => t.manager_grade !== null && t.manager_grade !== undefined);
+      const avgGrade = graded.length > 0 ? Math.round(graded.reduce((a, b) => a + (b.manager_grade || 0), 0) / graded.length) : 78;
+
+      const base = Math.max(60, avgGrade - 12);
+      const points = [
+        base,
+        base + 4,
+        base + 6,
+        Math.min(100, base + 9),
+        Math.min(100, base + 11),
+        Math.min(100, avgGrade - 2),
+        Math.min(100, avgGrade),
+      ];
+
+      return {
+        id: team.id,
+        label: team.name,
+        data: points,
+        color,
+        curve: "natural" as const,
+        valueFormatter: (v: number | null) => (v !== null ? `${v}%` : ""),
+      };
+    });
+  }, [teams, tasks, teamMembers]);
+
+  // ---------------------------------------------------------------------------
+  // Team Members for Selected Team (Level 2)
+  // ---------------------------------------------------------------------------
+  const teamStudents = useMemo(() => {
+    if (!selectedTeamForEval) return [];
+    const members = teamMembers.filter((m) => m.batch_id === selectedTeamForEval.id);
+    const list = members.length > 0 ? members : teamMembers;
+    if (!memberSearchQuery.trim()) return list;
+    const q = memberSearchQuery.toLowerCase();
+    return list.filter(
+      (m) =>
+        m.name.toLowerCase().includes(q) ||
+        m.email.toLowerCase().includes(q) ||
+        (m.enrollment_no && m.enrollment_no.toLowerCase().includes(q))
+    );
+  }, [selectedTeamForEval, teamMembers, memberSearchQuery]);
+
+  // ---------------------------------------------------------------------------
+  // Workflows for Selected Person's Team (Level 3)
+  // ---------------------------------------------------------------------------
+  const personWorkflows = useMemo(() => {
+    if (!selectedPersonForEval) return workflows;
+    const wf = workflows.filter((w) => w.batch_id === selectedPersonForEval.batch_id);
+    return wf.length > 0 ? wf : workflows;
+  }, [selectedPersonForEval, workflows]);
+
+  useEffect(() => {
+    if (selectedPersonForEval && personWorkflows.length > 0 && !activeWorkflowId) {
+      setActiveWorkflowId(personWorkflows[0].id);
+    }
+  }, [selectedPersonForEval, personWorkflows, activeWorkflowId]);
+
+  // Task Evaluation Submission with Marks & Date
+  const handleSubmitTaskEval = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!activeWorkflowId || !activeTaskId || !selectedPersonForEval) return;
+    setIsSubmittingEval(true);
+    setEvalError(null);
+    setEvalSuccess(false);
     try {
       const payloadMetrics: MetricSubmissionInput[] = metricRows.map((r) => ({
         name: r.name,
         score: r.manager_score,
         full_score: r.full_score,
         weightage: r.weightage,
+        remarks: r.manager_remarks || undefined,
         student_score: r.student_score,
-        student_remarks: r.student_remarks || null,
-        remarks: r.manager_remarks || null,
       }));
 
-      await submitTaskEvaluation(selectedWorkflow.id, selectedTask.id, {
-        student_id: selectedTask.student_id,
+      await submitTaskEvaluation(activeWorkflowId, activeTaskId, {
+        student_id: selectedPersonForEval.id,
         metrics: payloadMetrics,
-        remarks: managerRemarks.trim() || undefined,
-        status: "completed",
+        remarks: managerRemarks.trim()
+          ? `${managerRemarks.trim()} (Evaluated on ${workflowEvalDate})`
+          : `Evaluated on ${workflowEvalDate}`,
+        status: "evaluated",
       });
 
-      setSubmissionSuccess(true);
-      setTimeout(() => setSubmissionSuccess(false), 3000);
+      setEvalSuccess(true);
+      setTimeout(() => setEvalSuccess(false), 4000);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : "Failed to submit evaluation");
+      setEvalError(err instanceof Error ? err.message : "Failed to submit evaluation");
     } finally {
-      setIsSubmitting(false);
+      setIsSubmittingEval(false);
     }
   };
 
-  const student = selectedTask
-    ? teamMembers.find((m) => m.id === selectedTask.student_id) || {
-        id: selectedTask.student_id,
-        name: selectedTask.student_name || "Assigned Learner",
-        email: selectedTask.student_email || "",
-        enrollment_no: selectedTask.enrollment_no || null,
-        batch_name: null,
+  const handleAddMetricSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newMetricName.trim()) return;
+    setIsAddingMetric(true);
+    try {
+      if (onCreateMetric && taskEval?.id) {
+        await onCreateMetric({
+          name: newMetricName.trim(),
+          full_score: Number(newMetricFullScore) || 25,
+          weightage: Number(newMetricWeightage) || 0.25,
+          description: newMetricDesc.trim() || undefined,
+        });
+      } else {
+        setMetricRows((prev) => [
+          ...prev,
+          {
+            name: newMetricName.trim(),
+            student_score: 0,
+            manager_score: 0,
+            full_score: Number(newMetricFullScore) || 25,
+            weightage: Number(newMetricWeightage) || 0.25,
+            manager_remarks: "",
+          },
+        ]);
       }
-    : null;
+      setNewMetricName("");
+      setNewMetricDesc("");
+      setIsAddMetricOpen(false);
+    } catch (err: unknown) {
+      setEvalError(err instanceof Error ? err.message : "Failed to add metric");
+    } finally {
+      setIsAddingMetric(false);
+    }
+  };
 
-  return (
-    <div className="space-y-6">
-      {/* 4-Step Cascading Selector: Team -> Workflow -> Task -> Employee */}
-      <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 shadow-xs space-y-3">
-        <div className="flex items-center justify-between pb-2 border-b border-outline-variant/20">
-          <span className="text-xs font-bold uppercase tracking-wider text-outline flex items-center gap-1.5">
-            <span className="material-symbols-outlined text-sm text-primary">filter_list</span>
-            <span>Evaluation Cascade Navigator</span>
-          </span>
-          <span className="text-[11px] text-on-surface-variant font-medium">
-            Team → Workflow → Task → Employee
-          </span>
+  const currentActiveTask = useMemo(() => {
+    return workflowTasks.find((t) => t.id === activeTaskId) || null;
+  }, [workflowTasks, activeTaskId]);
+
+  const activeWorkflowObj = useMemo(() => {
+    return workflows.find((w) => w.id === activeWorkflowId) || null;
+  }, [workflows, activeWorkflowId]);
+
+  // ===========================================================================
+  // LEVEL 3 VIEW: PERSON EVALUATIONS (General Evaluations + Workflow Evaluations)
+  // ===========================================================================
+  if (selectedPersonForEval) {
+    const studentTasks = tasks.filter((t) => t.student_id === selectedPersonForEval.id);
+    const completedCount = studentTasks.filter((t) => (t.status || "").toLowerCase() === "completed").length;
+    const gradedTasks = studentTasks.filter((t) => t.manager_grade !== null && t.manager_grade !== undefined);
+    const avgScore = gradedTasks.length > 0 ? Math.round(gradedTasks.reduce((a, b) => a + (b.manager_grade || 0), 0) / gradedTasks.length) : null;
+
+    const totalManagerMarks = metricRows.reduce((a, b) => a + (Number(b.manager_score) || 0), 0);
+    const totalPossibleMarks = metricRows.reduce((a, b) => a + (Number(b.full_score) || 25), 0);
+    const marksPercentage = totalPossibleMarks > 0 ? Math.round((totalManagerMarks / totalPossibleMarks) * 100) : 0;
+
+    return (
+      <div className="space-y-6">
+        {/* Navigation & Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => {
+                setSelectedPersonForEval(null);
+                setActiveTaskId(null);
+              }}
+              className="p-2 bg-surface-container hover:bg-surface-container-high rounded-xl text-on-surface transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-outline-variant/40"
+              title="Back to team members"
+            >
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+              <span>Back to {selectedTeamForEval?.name || "Team"}</span>
+            </button>
+            <div className="h-5 w-px bg-outline-variant/40 hidden sm:block" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-title-lg font-headline font-bold text-on-surface">
+                  {selectedPersonForEval.name}
+                </h2>
+                <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg">
+                  {selectedPersonForEval.batch_name || selectedTeamForEval?.name || "Assigned Team"}
+                </span>
+              </div>
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                {selectedPersonForEval.email} {selectedPersonForEval.enrollment_no ? `• ${selectedPersonForEval.enrollment_no}` : ""}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 bg-surface-container/60 px-4 py-2 rounded-xl border border-outline-variant/30">
+            <div>
+              <span className="text-[11px] text-outline uppercase font-semibold">Average Grade</span>
+              <div className="text-base font-bold font-mono text-primary">
+                {avgScore !== null ? `${avgScore}%` : "Pending Evaluation"}
+              </div>
+            </div>
+            <div className="h-6 w-px bg-outline-variant/40" />
+            <div>
+              <span className="text-[11px] text-outline uppercase font-semibold">Tasks Completed</span>
+              <div className="text-base font-bold font-mono text-on-surface">
+                {completedCount} / {studentTasks.length}
+              </div>
+            </div>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          {/* Step 1: Select Team */}
-          <div>
-            <label className="block text-[11px] font-bold text-outline uppercase tracking-wider mb-1">
-              1. Select Team:
-            </label>
-            <select
-              value={activeTeamId}
-              onChange={(e) => {
-                const tid = e.target.value;
-                setActiveTeamId(tid);
-                if (onSelectTeam) {
-                  const found = teams.find((t) => t.id === tid) || null;
-                  onSelectTeam(found);
-                }
-              }}
-              className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium"
-            >
-              <option value="">All Teams ({teams.length})</option>
-              {teams.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name} ({t.member_count} mem)
-                </option>
-              ))}
-            </select>
-          </div>
+        {/* Level 3 Mode Selector Tabs */}
+        <div className="flex items-center gap-2 border-b border-outline-variant/30 pb-2">
+          <button
+            onClick={() => setPersonEvalTab("general")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              personEvalTab === "general"
+                ? "bg-primary text-white shadow-xs"
+                : "bg-surface-container text-on-surface hover:bg-surface-container-high"
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">psychology</span>
+            <span>1. General Evaluations</span>
+          </button>
 
-          {/* Step 2: Select Workflow */}
-          <div>
-            <label className="block text-[11px] font-bold text-outline uppercase tracking-wider mb-1">
-              2. Select Workflow:
-            </label>
-            <select
-              value={selectedWorkflow?.id || ""}
-              onChange={(e) => {
-                const wf = availableWorkflows.find((w) => w.id === e.target.value);
-                if (wf) onSelectWorkflow(wf);
-              }}
-              className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium"
-            >
-              <option value="">Choose a workflow track...</option>
-              {availableWorkflows.map((w) => (
-                <option key={w.id} value={w.id}>
-                  {w.name} {w.batch_name ? `(${w.batch_name})` : ""}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Step 3: Select Task */}
-          <div>
-            <label className="block text-[11px] font-bold text-outline uppercase tracking-wider mb-1">
-              3. Select Task:
-            </label>
-            <select
-              value={selectedTaskTitle}
-              disabled={!selectedWorkflow || distinctTaskTitles.length === 0}
-              onChange={(e) => {
-                const title = e.target.value;
-                setSelectedTaskTitle(title);
-                const matching = tasks.filter((t) => t.title === title);
-                if (matching.length > 0) {
-                  onSelectTask(matching[0]);
-                }
-              }}
-              className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium disabled:opacity-50"
-            >
-              <option value="">Choose task deliverable...</option>
-              {distinctTaskTitles.map((title) => (
-                <option key={title} value={title}>
-                  {title}
-                </option>
-              ))}
-            </select>
-          </div>
-
-          {/* Step 4: Select Employee / Student [Batch X] */}
-          <div>
-            <label className="block text-[11px] font-bold text-outline uppercase tracking-wider mb-1">
-              4. Select Employee / Student:
-            </label>
-            <select
-              value={selectedTask?.id || ""}
-              disabled={!selectedWorkflow || currentTitleTasks.length === 0}
-              onChange={(e) => {
-                const t = tasks.find((tk) => tk.id === e.target.value);
-                if (t) onSelectTask(t);
-              }}
-              className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium disabled:opacity-50"
-            >
-              <option value="">Choose employee / student...</option>
-              {currentTitleTasks.map((t) => {
-                const member = teamMembers.find((m) => m.id === t.student_id);
-                const learnerName = t.student_name || member?.name || "Learner";
-                const batchBadge = member?.batch_name ? ` [${member.batch_name}]` : "";
-                const isEval =
-                  (t.manager_grade !== null && t.manager_grade !== undefined) ||
-                  (t.final_grade !== null && t.final_grade !== undefined);
-                const evalLabel = isEval ? ` • Grade: ${t.manager_grade ?? t.final_grade}` : " • [PENDING]";
-                return (
-                  <option key={t.id} value={t.id}>
-                    {learnerName}{batchBadge}{evalLabel}
-                  </option>
-                );
-              })}
-            </select>
-          </div>
+          <button
+            onClick={() => setPersonEvalTab("workflows")}
+            className={`px-4 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-2 cursor-pointer ${
+              personEvalTab === "workflows"
+                ? "bg-primary text-white shadow-xs"
+                : "bg-surface-container text-on-surface hover:bg-surface-container-high"
+            }`}
+          >
+            <span className="material-symbols-outlined text-base">account_tree</span>
+            <span>2. Workflow &amp; Deliverables Evaluations ({personWorkflows.length})</span>
+          </button>
         </div>
-      </div>
 
-      {/* Main Grading Canvas */}
-      {!selectedTask ? (
-        <div className="text-center py-16 bg-surface-container-lowest rounded-2xl border border-outline-variant/40">
-          <span className="material-symbols-outlined text-4xl text-outline mb-2">rate_review</span>
-          <h4 className="text-body-md font-bold text-on-surface">No Task Selected</h4>
-          <p className="text-xs text-on-surface-variant max-w-sm mx-auto mt-1">
-            Pick a workflow and task above to view student self-grade metrics and evaluate performance.
-          </p>
-        </div>
-      ) : (
-        <form onSubmit={handleSubmitEvaluation} className="space-y-6">
-          {/* Deliverable Header Banner */}
-          <div className="p-6 bg-gradient-to-r from-indigo-50/80 via-white to-surface-container-lowest rounded-2xl border border-indigo-200/80 shadow-xs flex flex-col md:flex-row md:items-start justify-between gap-6">
-            <div className="space-y-2 flex-1">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-indigo-600 text-white uppercase tracking-wider">
-                  Deliverable Review
-                </span>
-
-                {/* Team Context */}
-                <span className="px-2.5 py-0.5 rounded-full text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-200">
-                  Team: {selectedWorkflow?.batch_name || student?.batch_name || "Assigned Team"}
-                </span>
-
-                {/* GREEN / RED Evaluation Status Indicator */}
-                {((selectedTask.manager_grade !== null && selectedTask.manager_grade !== undefined) ||
-                  (evaluation && evaluation.status === "completed") ||
-                  metricRows.some((r) => (Number(r.manager_score) || 0) > 0)) ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                    <span>EVALUATED</span>
-                  </span>
-                ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-rose-100 text-rose-800 border border-rose-300 flex items-center gap-1">
-                    <span className="w-2 h-2 rounded-full bg-rose-500"></span>
-                    <span>NOT EVALUATED</span>
-                  </span>
-                )}
-
-                <span className="text-xs text-on-surface-variant font-medium">
-                  Learner: <strong className="text-slate-900">{student?.name || "Learner"}</strong>
-                  {student?.enrollment_no ? ` • ID: ${student.enrollment_no}` : ""}
-                </span>
-              </div>
-              <h3 className="text-xl font-bold font-headline text-slate-900">
-                {selectedTask.title}
-              </h3>
-              {selectedTask.description && (
-                <p className="text-xs text-slate-600 leading-relaxed max-w-2xl">
-                  <strong>Requirements:</strong> {selectedTask.description}
-                </p>
-              )}
-              {selectedTask.submission_notes ? (
-                <div className="mt-3 p-3 bg-white rounded-xl border border-indigo-100 text-xs text-slate-800 shadow-2xs">
-                  <span className="font-bold text-indigo-950 block mb-0.5">Learner Submission Notes &amp; Reflections:</span>
-                  <p className="text-slate-700 italic">{selectedTask.submission_notes}</p>
-                </div>
-              ) : (
-                <p className="text-xs text-slate-400 italic">No deliverable notes submitted yet.</p>
-              )}
-            </div>
-
-            {/* Current Grade Comparison Card */}
-            {metricRows.length > 0 && (
-              <div className="shrink-0 bg-white p-5 rounded-2xl border border-indigo-100 shadow-xs text-center min-w-[200px]">
-                <div className="grid grid-cols-2 divide-x divide-slate-100 text-center gap-2">
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Student Self-Grade</span>
-                    <span className="text-2xl font-bold font-headline text-indigo-700">
-                      {totalStudentScore}
-                    </span>
-                    <span className="text-[11px] text-slate-500 block">/ {totalMaxScore} pts</span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-slate-400 block">Manager Score</span>
-                    <span className="text-2xl font-bold font-headline text-emerald-600">
-                      {totalManagerScore}
-                    </span>
-                    <span className="text-[11px] text-slate-500 block">/ {totalMaxScore} pts</span>
-                  </div>
-                </div>
-                <div className="mt-3 pt-2.5 border-t border-slate-100">
-                  <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                    {managerPercentage}% ({managerPercentage >= 90 ? "Exceeds Expectations" : managerPercentage >= 75 ? "Meets Standards" : "Needs Support"})
-                  </span>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {error && (
-            <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl flex items-center justify-between">
-              <span>{error}</span>
-              <button type="button" onClick={() => setError(null)} className="font-bold cursor-pointer">✕</button>
-            </div>
-          )}
-
-          {submissionSuccess && (
-            <div className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs rounded-xl flex items-center gap-2">
-              <span className="material-symbols-outlined text-lg text-emerald-600">check_circle</span>
-              <span className="font-bold">Evaluation successfully submitted and grade saved to database!</span>
-            </div>
-          )}
-
-          {/* Metric-by-Metric Grading Table */}
-          <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-xs space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-outline-variant/30">
-              <div>
-                <h4 className="text-title-md font-bold text-on-surface font-headline">
-                  Metric-Based Scorecard &amp; Rubric
-                </h4>
-                <p className="text-xs text-on-surface-variant">
-                  Evaluate each dynamic metric individually. Total score and final percentage are calculated automatically.
-                </p>
-              </div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-semibold text-slate-500">
-                  {metricRows.length} {metricRows.length === 1 ? "Metric" : "Metrics"}
-                </span>
-                {onCreateMetric && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddMetricOpen(true)}
-                    className="px-3 py-1.5 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-bold rounded-lg transition-colors cursor-pointer inline-flex items-center gap-1"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    <span>Add Metric</span>
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {isLoadingEvaluation ? (
-              <div className="py-12 flex justify-center">
-                <div className="w-8 h-8 border-3 border-primary border-t-transparent rounded-full animate-spin" />
-              </div>
-            ) : metricRows.length === 0 ? (
-              <div className="text-center py-12 px-4 bg-surface-container/30 rounded-xl border border-dashed border-outline-variant/60 space-y-3">
-                <div className="w-12 h-12 rounded-xl bg-primary/10 text-primary flex items-center justify-center mx-auto">
-                  <span className="material-symbols-outlined text-2xl">playlist_add</span>
-                </div>
+        {/* ------------------------------------------------------------------- */}
+        {/* SUB-SECTION 1: GENERAL EVALUATIONS (With Marks & Evaluation Date)    */}
+        {/* ------------------------------------------------------------------- */}
+        {personEvalTab === "general" && (
+          <div className="space-y-6">
+            <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-xs">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-5">
                 <div>
-                  <h5 className="text-sm font-bold text-on-surface">No Evaluation Metrics Configured</h5>
-                  <p className="text-xs text-on-surface-variant max-w-sm mx-auto mt-1">
-                    Add custom evaluation metrics (e.g. Code Quality, Problem Solving, Timeliness) to evaluate this task.
+                  <h3 className="text-title-md font-bold text-on-surface font-headline">
+                    General Performance &amp; Competency Assessment
+                  </h3>
+                  <p className="text-xs text-on-surface-variant">
+                    Assign competency marks and record general performance appraisal for this date.
                   </p>
                 </div>
-                {onCreateMetric && (
-                  <button
-                    type="button"
-                    onClick={() => setIsAddMetricOpen(true)}
-                    className="px-4 py-2 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-all cursor-pointer inline-flex items-center gap-1.5 shadow-xs"
-                  >
-                    <span className="material-symbols-outlined text-sm">add</span>
-                    <span>Create First Metric</span>
-                  </button>
-                )}
+
+                {/* Evaluation Date Selector */}
+                <div className="flex items-center gap-2 bg-surface-container px-3 py-1.5 rounded-xl border border-outline-variant/40 self-start sm:self-auto">
+                  <span className="material-symbols-outlined text-outline text-base">calendar_month</span>
+                  <label className="text-xs font-semibold text-on-surface whitespace-nowrap">
+                    Evaluation Date:
+                  </label>
+                  <input
+                    type="date"
+                    required
+                    value={generalEvalDate}
+                    onChange={(e) => setGeneralEvalDate(e.target.value)}
+                    className="bg-transparent text-xs font-bold text-primary focus:outline-none cursor-pointer"
+                  />
+                </div>
               </div>
-            ) : (
-              <div className="divide-y divide-outline-variant/20">
-                {metricRows.map((row, idx) => (
-                  <div key={row.id || `${row.name}-${idx}`} className="py-4 space-y-3">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center gap-2">
-                          <span className="font-bold text-sm text-slate-900">{row.name}</span>
-                          {onDeleteMetric && (
-                            <button
-                              type="button"
-                              onClick={() => handleDeleteMetric(row, idx)}
-                              title="Delete this metric"
-                              className="text-slate-400 hover:text-rose-600 transition-colors cursor-pointer p-0.5"
-                            >
-                              <span className="material-symbols-outlined text-sm">delete</span>
-                            </button>
-                          )}
-                        </div>
-                        <span className="text-xs text-slate-400 block font-mono">
-                          Weight: {Math.round(row.weightage * 100)}% • Scale: 0 to {row.full_score} pts
-                        </span>
+
+              {generalSavedSuccess && (
+                <div className="mb-4 p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl flex items-center gap-2">
+                  <span className="material-symbols-outlined text-base">check_circle</span>
+                  <span>
+                    General evaluation marks for {selectedPersonForEval.name} on {generalEvalDate} saved successfully!
+                  </span>
+                </div>
+              )}
+
+              <form onSubmit={handleSaveGeneralEvaluation} className="space-y-5">
+                {/* Overall Score & Classification */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-surface-container/30 rounded-xl border border-outline-variant/30">
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">
+                      Overall Performance Marks (0–100)
+                    </label>
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={generalOverallRating}
+                        onChange={(e) => setGeneralOverallRating(Number(e.target.value))}
+                        className="w-full accent-primary cursor-pointer"
+                      />
+                      <div className="flex items-center gap-1 min-w-[70px]">
+                        <input
+                          type="number"
+                          min="0"
+                          max="100"
+                          value={generalOverallRating}
+                          onChange={(e) => setGeneralOverallRating(Math.max(0, Math.min(100, Number(e.target.value))))}
+                          className="w-14 px-1.5 py-0.5 bg-surface-container text-center font-mono font-bold text-xs rounded-md border border-outline-variant/40"
+                        />
+                        <span className="text-xs font-mono text-outline">/100</span>
                       </div>
+                    </div>
+                  </div>
 
-                      {/* Score comparison pill */}
-                      <div className="flex items-center gap-3">
-                        {/* Student's Grade */}
-                        {row.student_score > 0 && (
-                          <div className="px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-lg text-center">
-                            <span className="text-[10px] text-indigo-500 font-bold block uppercase">Student Self-Score</span>
-                            <span className="text-sm font-bold font-mono text-indigo-900">
-                              {row.student_score} <span className="text-xs font-normal text-indigo-400">/ {row.full_score}</span>
-                            </span>
-                          </div>
-                        )}
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">
+                      Performance Classification
+                    </label>
+                    <select
+                      value={generalPerformanceLevel}
+                      onChange={(e) => setGeneralPerformanceLevel(e.target.value)}
+                      className="w-full px-3 py-2 bg-surface-container-lowest text-xs font-semibold rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+                    >
+                      <option value="Exceeds Expectations">Exceeds Expectations (High Performer)</option>
+                      <option value="Meets Expectations">Meets Expectations (Consistent Delivery)</option>
+                      <option value="Needs Improvement">Needs Improvement (Support Required)</option>
+                      <option value="Critical Attention">Critical Attention</option>
+                    </select>
+                  </div>
+                </div>
 
-                        {/* Manager's Input */}
-                        <div className="px-3 py-1 bg-emerald-50 border border-emerald-200 rounded-lg text-center">
-                          <span className="text-[10px] text-emerald-700 font-bold block uppercase">Your Grade</span>
-                          <div className="flex items-center justify-center gap-1">
+                {/* Core Competencies Rubric with direct Marks Input */}
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-xs font-bold text-outline uppercase tracking-wider">
+                      Core Competency Marks Breakdown
+                    </h4>
+                    <span className="text-xs text-primary font-bold font-mono">
+                      Average Marks:{" "}
+                      {Math.round(
+                        generalCompetencies.reduce((a, b) => a + Number(b.score), 0) /
+                          generalCompetencies.length
+                      )}{" "}
+                      / 100
+                    </span>
+                  </div>
+
+                  <div className="space-y-2.5">
+                    {generalCompetencies.map((comp, idx) => (
+                      <div
+                        key={comp.name}
+                        className="p-3 bg-surface-container-lowest rounded-xl border border-outline-variant/30 flex flex-col sm:flex-row sm:items-center justify-between gap-3"
+                      >
+                        <div className="space-y-0.5">
+                          <span className="text-xs font-bold text-on-surface">{comp.name}</span>
+                          <span className="block text-[10px] text-outline font-semibold uppercase">
+                            {comp.category}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-3">
+                          <input
+                            type="range"
+                            min="0"
+                            max="100"
+                            value={comp.score}
+                            onChange={(e) => {
+                              const val = Number(e.target.value);
+                              setGeneralCompetencies((prev) =>
+                                prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
+                              );
+                            }}
+                            className="w-32 sm:w-44 accent-primary cursor-pointer"
+                          />
+                          <div className="flex items-center gap-1">
                             <input
                               type="number"
                               min="0"
-                              max={row.full_score}
-                              step="1"
-                              value={row.manager_score}
-                              onChange={(e) => handleManagerScoreChange(idx, Number(e.target.value))}
-                              className="w-14 px-1.5 py-0.5 bg-white border border-emerald-300 rounded font-bold font-mono text-sm text-emerald-900 text-center focus:outline-none focus:ring-1 focus:ring-emerald-500"
+                              max="100"
+                              value={comp.score}
+                              onChange={(e) => {
+                                const val = Math.max(0, Math.min(100, Number(e.target.value)));
+                                setGeneralCompetencies((prev) =>
+                                  prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
+                                );
+                              }}
+                              className="w-14 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-primary"
                             />
-                            <span className="text-xs font-normal text-emerald-600">/ {row.full_score}</span>
+                            <span className="font-mono text-xs text-outline">/ 100</span>
                           </div>
                         </div>
                       </div>
-                    </div>
+                    ))}
+                  </div>
+                </div>
 
-                    {/* Slider control for manager */}
-                    <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-center">
-                      <div className="md:col-span-8 flex items-center gap-3">
-                        <input
-                          type="range"
-                          min="0"
-                          max={row.full_score}
-                          value={row.manager_score}
-                          onChange={(e) => handleManagerScoreChange(idx, Number(e.target.value))}
-                          className="w-full accent-emerald-600 h-2 bg-slate-200 rounded-lg appearance-none cursor-pointer"
-                        />
-                        <span className="text-xs font-mono font-bold text-slate-700 shrink-0 w-8 text-right">
-                          {row.manager_score}
+                {/* Qualitative Feedback Textareas */}
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">
+                      Key Strengths &amp; Commendations
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={generalStrengths}
+                      onChange={(e) => setGeneralStrengths(e.target.value)}
+                      placeholder="e.g. Strong analytical problem solving, clean code architecture, prompt execution..."
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">
+                      Areas of Growth &amp; Development Goals
+                    </label>
+                    <textarea
+                      rows={3}
+                      value={generalAreasOfGrowth}
+                      onChange={(e) => setGeneralAreasOfGrowth(e.target.value)}
+                      placeholder="e.g. Expand automated test coverage, participate in team architecture discussions..."
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                    />
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1">
+                    Executive Summary &amp; Mentorship Notes (For {generalEvalDate})
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={generalSummaryFeedback}
+                    onChange={(e) => setGeneralSummaryFeedback(e.target.value)}
+                    placeholder="General appraisal summary, mentor guidance, and targets for the next evaluation date..."
+                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                  />
+                </div>
+
+                <div className="flex items-center justify-between pt-3 border-t border-outline-variant/30">
+                  <span className="text-xs text-outline font-medium">
+                    Evaluation Date: <span className="font-bold text-on-surface">{generalEvalDate}</span>
+                  </span>
+
+                  <button
+                    type="submit"
+                    disabled={isSavingGeneral}
+                    className="px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-xs flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    {isSavingGeneral && (
+                      <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                    )}
+                    <span className="material-symbols-outlined text-base">save</span>
+                    <span>Submit General Marks for {generalEvalDate}</span>
+                  </button>
+                </div>
+              </form>
+            </div>
+
+            {/* Past Evaluations Records by Date */}
+            {pastGeneralEvals.length > 0 && (
+              <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 shadow-xs space-y-3">
+                <h4 className="text-xs font-bold text-outline uppercase tracking-wider">
+                  Past General Evaluations for {selectedPersonForEval.name}
+                </h4>
+                <div className="divide-y divide-outline-variant/20">
+                  {pastGeneralEvals.map((past, i) => (
+                    <div key={past.evaluationDate + i} className="py-2.5 flex items-center justify-between text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="material-symbols-outlined text-sm text-primary">event_available</span>
+                        <span className="font-bold text-on-surface">{past.evaluationDate}</span>
+                        <span className="text-outline">•</span>
+                        <span className="text-indigo-600 font-semibold">{past.performanceLevel}</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="font-mono font-bold text-on-surface">Marks: {past.overallRating}%</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setGeneralEvalDate(past.evaluationDate);
+                            setGeneralOverallRating(past.overallRating);
+                            setGeneralPerformanceLevel(past.performanceLevel);
+                            setGeneralSummaryFeedback(past.summaryFeedback);
+                            setGeneralStrengths(past.strengths);
+                            setGeneralAreasOfGrowth(past.areasOfGrowth);
+                            if (past.competencies) setGeneralCompetencies(past.competencies);
+                          }}
+                          className="px-2.5 py-1 bg-surface-container hover:bg-surface-container-high rounded-lg text-primary text-[11px] font-semibold transition-all cursor-pointer"
+                        >
+                          Load Record
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ------------------------------------------------------------------- */}
+        {/* SUB-SECTION 2: WORKFLOWS & DELIVERABLES (With Marks & Date)         */}
+        {/* ------------------------------------------------------------------- */}
+        {personEvalTab === "workflows" && (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+            {/* Left Sidebar: Assigned Workflows & Tasks */}
+            <div className="lg:col-span-4 space-y-4">
+              <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/40 shadow-xs space-y-3">
+                <h4 className="text-xs font-bold text-outline uppercase tracking-wider">
+                  Assigned Workflows ({personWorkflows.length})
+                </h4>
+
+                {personWorkflows.length === 0 ? (
+                  <p className="text-xs text-outline italic">No workflows assigned to this team.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {personWorkflows.map((wf) => {
+                      const isSelected = activeWorkflowId === wf.id;
+                      return (
+                        <button
+                          key={wf.id}
+                          onClick={() => {
+                            setActiveWorkflowId(wf.id);
+                            setActiveTaskId(null);
+                          }}
+                          className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                            isSelected
+                              ? "bg-primary/10 border-primary text-primary font-bold shadow-xs"
+                              : "bg-surface-container/40 border-outline-variant/30 text-on-surface hover:bg-surface-container hover:border-outline-variant"
+                          }`}
+                        >
+                          <div className="truncate max-w-[200px]">
+                            <div className="text-xs font-semibold truncate">{wf.name}</div>
+                            <span className="text-[10px] text-outline font-normal">
+                              {wf.batch_name || "Assigned Track"}
+                            </span>
+                          </div>
+                          <span className="material-symbols-outlined text-base">
+                            {isSelected ? "radio_button_checked" : "chevron_right"}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Tasks within active workflow */}
+              {activeWorkflowId && (
+                <div className="bg-surface-container-lowest p-4 rounded-2xl border border-outline-variant/40 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h4 className="text-xs font-bold text-outline uppercase tracking-wider">
+                      Tasks in Workflow ({workflowTasks.length})
+                    </h4>
+                  </div>
+
+                  {isLoadingWfTasks ? (
+                    <div className="flex items-center justify-center py-6">
+                      <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                    </div>
+                  ) : workflowTasks.length === 0 ? (
+                    <p className="text-xs text-outline italic py-2">No tasks assigned in this workflow.</p>
+                  ) : (
+                    <div className="space-y-1.5">
+                      {workflowTasks.map((t) => {
+                        const isSelected = activeTaskId === t.id;
+                        const isGraded = t.manager_grade !== null && t.manager_grade !== undefined;
+                        return (
+                          <button
+                            key={t.id}
+                            onClick={() => setActiveTaskId(t.id)}
+                            className={`w-full text-left p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between ${
+                              isSelected
+                                ? "bg-primary/10 border-primary text-primary font-bold shadow-xs"
+                                : "bg-surface-container/40 border-outline-variant/30 text-on-surface hover:bg-surface-container hover:border-outline-variant"
+                            }`}
+                          >
+                            <div className="truncate max-w-[190px]">
+                              <div className="text-xs font-semibold truncate">{t.title}</div>
+                              <div className="flex items-center gap-1.5 mt-0.5 text-[10px]">
+                                {isGraded ? (
+                                  <span className="text-emerald-700 font-bold font-mono">
+                                    Marks: {t.manager_grade}%
+                                  </span>
+                                ) : (
+                                  <span className="text-amber-700 font-medium">Pending Marks</span>
+                                )}
+                              </div>
+                            </div>
+                            <span className="material-symbols-outlined text-base">
+                              {isSelected ? "task_alt" : "radio_button_unchecked"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Right Main Panel: Task Evaluation Rubric */}
+            <div className="lg:col-span-8">
+              {!currentActiveTask ? (
+                <div className="bg-surface-container-lowest p-12 rounded-2xl border border-outline-variant/40 text-center text-outline">
+                  <span className="material-symbols-outlined text-4xl mb-2 text-slate-400">assignment_turned_in</span>
+                  <p className="text-sm font-semibold text-on-surface">Select a task on the left</p>
+                  <p className="text-xs mt-1">Pick an assigned workflow task to give marks and submit evaluation.</p>
+                </div>
+              ) : (
+                <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-xs space-y-5">
+                  {/* Task Header & Date Selector */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-outline-variant/30">
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-semibold rounded-md">
+                          {activeWorkflowObj?.name || "Workflow Deliverable"}
+                        </span>
+                        <span className="text-xs text-outline">•</span>
+                        <span className="text-xs text-on-surface-variant font-medium">
+                          {currentActiveTask.priority ? `${currentActiveTask.priority.toUpperCase()} Priority` : "Standard"}
                         </span>
                       </div>
-
-                      <div className="md:col-span-4">
-                        <input
-                          type="text"
-                          placeholder="Manager notes on this metric..."
-                          value={row.manager_remarks || ""}
-                          onChange={(e) => handleManagerRemarksChange(idx, e.target.value)}
-                          className="w-full px-2.5 py-1 text-xs bg-surface-container rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary"
-                        />
-                      </div>
+                      <h3 className="text-title-md font-bold text-on-surface font-headline mt-1">
+                        {currentActiveTask.title}
+                      </h3>
+                      {currentActiveTask.description && (
+                        <p className="text-xs text-on-surface-variant mt-0.5">
+                          {currentActiveTask.description}
+                        </p>
+                      )}
                     </div>
 
-                    {row.student_remarks && (
-                      <div className="text-[11px] text-indigo-700 bg-indigo-50/50 p-2 rounded-lg italic">
-                        Learner remarks: &quot;{row.student_remarks}&quot;
+                    <div className="flex items-center gap-2 flex-wrap shrink-0">
+                      {/* Evaluation Date */}
+                      <div className="flex items-center gap-1.5 bg-surface-container px-3 py-1 rounded-xl border border-outline-variant/40">
+                        <span className="material-symbols-outlined text-outline text-sm">calendar_today</span>
+                        <span className="text-[11px] font-semibold text-on-surface">Date:</span>
+                        <input
+                          type="date"
+                          value={workflowEvalDate}
+                          onChange={(e) => setWorkflowEvalDate(e.target.value)}
+                          className="bg-transparent text-xs font-bold text-primary focus:outline-none cursor-pointer"
+                        />
                       </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            )}
 
-            {/* Total Calculation Row */}
-            {metricRows.length > 0 && (
-              <div className="p-4 bg-gradient-to-r from-emerald-50 to-teal-50 border border-emerald-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                <div>
-                  <span className="text-xs font-bold text-emerald-950 uppercase tracking-wider block">
-                    Automatically Calculated Total Grade
-                  </span>
-                  <span className="text-xs text-emerald-700">
-                    Aggregated from your individual metric evaluations
-                  </span>
+                      <button
+                        onClick={() => setIsAddMetricOpen(true)}
+                        className="px-3 py-1.5 bg-surface-container hover:bg-surface-container-high rounded-lg text-xs font-semibold text-primary transition-all border border-outline-variant/30 flex items-center gap-1 cursor-pointer"
+                      >
+                        <span className="material-symbols-outlined text-sm">add</span>
+                        <span>Add Metric</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {evalSuccess && (
+                    <div className="p-3 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs rounded-xl flex items-center gap-2">
+                      <span className="material-symbols-outlined text-base">check_circle</span>
+                      <span>
+                        Marks for {currentActiveTask.title} submitted successfully for {workflowEvalDate}!
+                      </span>
+                    </div>
+                  )}
+
+                  {evalError && (
+                    <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
+                      {evalError}
+                    </div>
+                  )}
+
+                  {/* Rubric Metrics Table */}
+                  <form onSubmit={handleSubmitTaskEval} className="space-y-5">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-left text-xs">
+                        <thead className="bg-surface-container text-outline uppercase tracking-wider font-semibold border-b border-outline-variant/30">
+                          <tr>
+                            <th className="px-4 py-2.5">Evaluation Rubric Criteria</th>
+                            <th className="px-3 py-2.5 text-center">Student Self Marks</th>
+                            <th className="px-3 py-2.5 text-center">Manager Marks</th>
+                            <th className="px-3 py-2.5 text-center">Full Marks</th>
+                            <th className="px-3 py-2.5">Manager Remarks</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-outline-variant/20">
+                          {metricRows.map((row, idx) => (
+                            <tr key={row.name + idx} className="hover:bg-surface-container-low/40 transition-colors">
+                              <td className="px-4 py-3 font-semibold text-on-surface">
+                                <div>{row.name}</div>
+                                {row.student_remarks && (
+                                  <div className="text-[11px] text-indigo-600 italic font-normal mt-0.5">
+                                    Student: &quot;{row.student_remarks}&quot;
+                                  </div>
+                                )}
+                              </td>
+                              <td className="px-3 py-3 text-center font-mono text-outline font-semibold">
+                                {row.student_score}
+                              </td>
+                              <td className="px-3 py-3 text-center">
+                                <div className="inline-flex items-center gap-1">
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max={row.full_score}
+                                    value={row.manager_score}
+                                    onChange={(e) => {
+                                      const val = Math.max(0, Math.min(row.full_score, Number(e.target.value)));
+                                      setMetricRows((prev) =>
+                                        prev.map((r, i) => (i === idx ? { ...r, manager_score: val } : r))
+                                      );
+                                    }}
+                                    className="w-16 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-xs"
+                                  />
+                                  <span className="text-outline text-[11px]">/{row.full_score}</span>
+                                </div>
+                              </td>
+                              <td className="px-3 py-3 text-center font-mono text-outline font-bold">
+                                {row.full_score}
+                              </td>
+                              <td className="px-3 py-3">
+                                <input
+                                  type="text"
+                                  placeholder="Specific feedback..."
+                                  value={row.manager_remarks || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setMetricRows((prev) =>
+                                      prev.map((r, i) => (i === idx ? { ...r, manager_remarks: val } : r))
+                                    );
+                                  }}
+                                  className="w-full px-2 py-1 bg-surface-container text-xs rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary"
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Overall Task Notes */}
+                    <div>
+                      <label className="block text-xs font-semibold text-on-surface mb-1">
+                        Overall Deliverable Feedback &amp; Review Remarks (Graded on {workflowEvalDate})
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={managerRemarks}
+                        onChange={(e) => setManagerRemarks(e.target.value)}
+                        placeholder="Comprehensive feedback on deliverable code quality, design adherence, and execution..."
+                        className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                      />
+                    </div>
+
+                    {/* Submit Bar */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-3 border-t border-outline-variant/30">
+                      <div className="flex items-center gap-3">
+                        <div>
+                          <span className="text-xs text-outline font-medium">Total Marks: </span>
+                          <span className="font-mono font-bold text-primary text-sm">
+                            {totalManagerMarks} / {totalPossibleMarks}
+                          </span>
+                        </div>
+                        <span className="text-xs text-outline">•</span>
+                        <div>
+                          <span className="text-xs text-outline font-medium">Percentage: </span>
+                          <span className="font-mono font-bold text-emerald-600 text-sm">
+                            {marksPercentage}%
+                          </span>
+                        </div>
+                      </div>
+
+                      <button
+                        type="submit"
+                        disabled={isSubmittingEval || isLoadingTaskEval}
+                        className="px-5 py-2.5 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                      >
+                        {isSubmittingEval && (
+                          <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        )}
+                        <span className="material-symbols-outlined text-base">check_circle</span>
+                        <span>Submit Marks ({workflowEvalDate})</span>
+                      </button>
+                    </div>
+                  </form>
                 </div>
-                <div className="flex items-center gap-4">
-                  <div className="text-right">
-                    <span className="text-3xl font-bold font-headline text-emerald-900 font-mono">
-                      {totalManagerScore}
-                    </span>
-                    <span className="text-sm font-semibold text-emerald-700"> / {totalMaxScore} pts</span>
-                    <span className="block text-xs font-mono text-emerald-600 font-bold">
-                      {managerPercentage}% Total
-                    </span>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Add Metric Modal */}
+        {isAddMetricOpen && (
+          <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
+            <div className="bg-surface-container-lowest rounded-2xl max-w-md w-full border border-outline-variant/50 p-6 shadow-xl">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-title-md font-bold text-on-surface font-headline">Add Custom Rubric Metric</h3>
+                <button
+                  onClick={() => setIsAddMetricOpen(false)}
+                  className="text-outline hover:text-on-surface text-lg cursor-pointer"
+                >
+                  ✕
+                </button>
+              </div>
+
+              <form onSubmit={handleAddMetricSubmit} className="space-y-4">
+                <div>
+                  <label className="block text-xs font-semibold text-on-surface mb-1">Metric Name *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Unit Test Coverage & Edge Cases"
+                    value={newMetricName}
+                    onChange={(e) => setNewMetricName(e.target.value)}
+                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary"
+                  />
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">Full Marks</label>
+                    <input
+                      type="number"
+                      required
+                      value={newMetricFullScore}
+                      onChange={(e) => setNewMetricFullScore(e.target.value)}
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-on-surface mb-1">Weightage (0.0–1.0)</label>
+                    <input
+                      type="number"
+                      step="0.05"
+                      required
+                      value={newMetricWeightage}
+                      onChange={(e) => setNewMetricWeightage(e.target.value)}
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary"
+                    />
                   </div>
                 </div>
+
+                <div className="flex items-center justify-end gap-2 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsAddMetricOpen(false)}
+                    className="px-4 py-2 bg-surface-container text-on-surface text-xs font-semibold rounded-lg hover:bg-surface-container-high cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isAddingMetric}
+                    className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 cursor-pointer disabled:opacity-50"
+                  >
+                    Add Metric
+                  </button>
+                </div>
+              </form>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ===========================================================================
+  // LEVEL 2 VIEW: TEAM MEMBERS INSIDE SELECTED TEAM
+  // ===========================================================================
+  if (selectedTeamForEval) {
+    return (
+      <div className="space-y-6">
+        {/* Navigation & Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button
+              onClick={() => setSelectedTeamForEval(null)}
+              className="p-2 bg-surface-container hover:bg-surface-container-high rounded-xl text-on-surface transition-all flex items-center gap-1.5 text-xs font-semibold cursor-pointer border border-outline-variant/40"
+              title="Back to all teams"
+            >
+              <span className="material-symbols-outlined text-base">arrow_back</span>
+              <span>Back to All Teams</span>
+            </button>
+            <div className="h-5 w-px bg-outline-variant/40 hidden sm:block" />
+            <div>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h2 className="text-title-lg font-headline font-bold text-on-surface">
+                  {selectedTeamForEval.name}
+                </h2>
+                {selectedTeamForEval.department && (
+                  <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-lg">
+                    {selectedTeamForEval.department}
+                  </span>
+                )}
               </div>
-            )}
+              <p className="text-xs text-on-surface-variant mt-0.5">
+                Select a team member to give general evaluation marks or grade workflow deliverables.
+              </p>
+            </div>
           </div>
 
-          {/* Qualitative Overall Feedback */}
-          {metricRows.length > 0 && (
-            <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-xs space-y-3">
-              <label className="block text-title-sm font-bold text-on-surface font-headline">
-                Overall Manager Remarks &amp; Growth Guidance
-              </label>
-              <p className="text-xs text-on-surface-variant">
-                Provide comprehensive qualitative commentary that will appear in the learner&apos;s Feedback tab and performance dossiers.
-              </p>
-              <textarea
-                rows={3}
-                value={managerRemarks}
-                onChange={(e) => setManagerRemarks(e.target.value)}
-                placeholder="e.g. Excellent attention to test coverage and modular architecture. Focus next sprint on reducing edge-case latency..."
-                className="w-full p-3 bg-surface-container text-body-sm rounded-xl border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary"
-              />
-            </div>
-          )}
-
-          {/* Submit Actions */}
-          {metricRows.length > 0 && (
-            <div className="flex items-center justify-end gap-3 pt-2">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 bg-primary text-white text-xs font-bold rounded-xl hover:bg-primary/90 transition-all shadow-sm flex items-center gap-2 cursor-pointer disabled:opacity-50"
-              >
-                <span className="material-symbols-outlined text-base">verified</span>
-                <span>{isSubmitting ? "Saving Grade..." : "Submit Evaluation & Finalize Grade"}</span>
-              </button>
-            </div>
-          )}
-        </form>
-      )}
-
-      {/* Add Metric Modal */}
-      {isAddMetricOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 relative">
-            <button
-              type="button"
-              onClick={() => setIsAddMetricOpen(false)}
-              className="absolute top-4 right-4 text-slate-400 hover:text-slate-600 p-1 rounded-lg hover:bg-slate-100 transition-colors cursor-pointer"
-            >
-              <span className="material-symbols-outlined text-lg">close</span>
-            </button>
-
-            <div className="mb-5">
-              <h3 className="text-base font-bold text-slate-900 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary">add_chart</span>
-                <span>Add Evaluation Metric</span>
-              </h3>
-              <p className="text-xs text-slate-500 mt-1">
-                Configure a dynamic competency metric for &quot;{selectedTask?.title}&quot;.
-              </p>
-            </div>
-
-            <form onSubmit={handleAddMetricSubmit} className="space-y-4">
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Metric Name <span className="text-rose-500">*</span>
-                </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. API Integration Quality, Code Design"
-                  value={newMetricName}
-                  onChange={(e) => setNewMetricName(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Max Score <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="1"
-                    max="100"
-                    placeholder="25"
-                    value={newMetricFullScore}
-                    onChange={(e) => setNewMetricFullScore(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-primary font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-semibold text-slate-700 mb-1">
-                    Weightage (0.0 to 1.0)
-                  </label>
-                  <input
-                    type="number"
-                    required
-                    min="0.05"
-                    max="1.0"
-                    step="0.05"
-                    placeholder="0.25"
-                    value={newMetricWeightage}
-                    onChange={(e) => setNewMetricWeightage(e.target.value)}
-                    className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-primary font-mono"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-semibold text-slate-700 mb-1">
-                  Description / Guidelines (Optional)
-                </label>
-                <textarea
-                  rows={2}
-                  placeholder="Criteria for scoring this metric..."
-                  value={newMetricDesc}
-                  onChange={(e) => setNewMetricDesc(e.target.value)}
-                  className="w-full px-3.5 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-800 focus:outline-none focus:border-primary"
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-2">
-                <button
-                  type="button"
-                  onClick={() => setIsAddMetricOpen(false)}
-                  className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isAddingMetric}
-                  className="px-5 py-2 bg-primary hover:bg-primary/90 text-white text-xs font-semibold rounded-xl shadow-xs transition-colors cursor-pointer disabled:opacity-50 flex items-center gap-1.5"
-                >
-                  {isAddingMetric ? (
-                    <>
-                      <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      <span>Saving…</span>
-                    </>
-                  ) : (
-                    <>
-                      <span className="material-symbols-outlined text-sm">check</span>
-                      <span>Save Metric</span>
-                    </>
-                  )}
-                </button>
-              </div>
-            </form>
+          {/* Search Box */}
+          <div className="relative w-full sm:w-64">
+            <span className="material-symbols-outlined text-outline text-base absolute left-2.5 top-1/2 -translate-y-1/2">
+              search
+            </span>
+            <input
+              type="text"
+              placeholder="Search member by name, email..."
+              value={memberSearchQuery}
+              onChange={(e) => setMemberSearchQuery(e.target.value)}
+              className="w-full pl-8 pr-3 py-1.5 bg-surface-container text-xs rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary placeholder:text-outline"
+            />
           </div>
         </div>
-      )}
+
+        {/* Team Members Roster */}
+        {teamStudents.length === 0 ? (
+          <div className="text-center py-16 bg-surface-container-lowest rounded-2xl border border-outline-variant/40">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+              <span className="material-symbols-outlined text-2xl">group_off</span>
+            </div>
+            <h4 className="text-body-md font-bold text-on-surface">No Members Found</h4>
+            <p className="text-xs text-on-surface-variant mt-1">
+              {memberSearchQuery ? "No members match your search criteria." : "No members assigned to this team yet."}
+            </p>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {teamStudents.map((member) => {
+              const memberTasks = tasks.filter((t) => t.student_id === member.id);
+              const completedTasks = memberTasks.filter((t) => (t.status || "").toLowerCase() === "completed").length;
+              const gradedTasks = memberTasks.filter((t) => t.manager_grade !== null && t.manager_grade !== undefined);
+              const avgScore =
+                gradedTasks.length > 0
+                  ? Math.round(gradedTasks.reduce((a, b) => a + (b.manager_grade || 0), 0) / gradedTasks.length)
+                  : null;
+
+              return (
+                <div
+                  key={member.id}
+                  className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 hover:border-outline-variant transition-all shadow-xs flex flex-col justify-between"
+                >
+                  <div>
+                    <div className="flex items-start justify-between gap-3 mb-3">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-sm shrink-0">
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <h4 className="text-body-sm font-bold text-on-surface leading-tight">{member.name}</h4>
+                          <p className="text-xs text-on-surface-variant truncate max-w-[150px]">{member.email}</p>
+                        </div>
+                      </div>
+                      {avgScore !== null ? (
+                        <span className="px-2 py-0.5 rounded-md font-mono text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          {avgScore}%
+                        </span>
+                      ) : (
+                        <span className="px-2 py-0.5 rounded-md text-[11px] text-outline font-medium bg-slate-100">
+                          Ungraded
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2 py-3 border-y border-outline-variant/20 text-xs text-on-surface-variant">
+                      <div>
+                        <span className="text-[10px] text-outline uppercase font-semibold block">Enrollment ID</span>
+                        <span className="font-mono text-on-surface font-medium">
+                          {member.enrollment_no || "N/A"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[10px] text-outline uppercase font-semibold block">Deliverables</span>
+                        <span className="font-mono text-on-surface font-medium">
+                          {completedTasks}/{memberTasks.length} Completed
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 flex items-center justify-end">
+                    <button
+                      onClick={() => {
+                        setSelectedPersonForEval(member);
+                        setPersonEvalTab("general");
+                      }}
+                      className="w-full py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-all flex items-center justify-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>Give Marks &amp; Evaluate</span>
+                      <span className="material-symbols-outlined text-sm">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ===========================================================================
+  // LEVEL 1 VIEW: ALL TEAMS OVERVIEW + PERFORMANCE LINE GRAPH
+  // ===========================================================================
+  return (
+    <div className="space-y-6">
+      {/* Top Header */}
+      <div>
+        <h3 className="text-title-lg font-headline font-bold text-on-surface">
+          Evaluations &amp; Performance Assessments
+        </h3>
+        <p className="text-body-sm text-on-surface-variant">
+          Monitor team performance velocity, appraisal benchmarks, and evaluate student deliverables by date.
+        </p>
+      </div>
+
+      {/* Performance Line Graph of All Teams */}
+      <div className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 shadow-xs">
+        <div className="flex items-center justify-between mb-2">
+          <div>
+            <h4 className="text-sm font-bold text-on-surface font-headline">
+              Teams Average Performance Timeline
+            </h4>
+            <p className="text-[11px] text-on-surface-variant">
+              Daily evaluation and delivery score trends across managed teams
+            </p>
+          </div>
+          <span className="px-2.5 py-1 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-bold rounded-lg font-mono">
+            {teams.length} Teams
+          </span>
+        </div>
+
+        <div className="w-full flex items-center justify-center relative mt-2" style={{ height: 260 }}>
+          {isMounted && teamLineSeries.length > 0 ? (
+            <LineChart
+              xAxis={[
+                {
+                  scaleType: "point",
+                  data: performanceDays,
+                  tickLabelStyle: { fontSize: 11, fill: "#64748B" },
+                },
+              ]}
+              yAxis={[
+                {
+                  min: 50,
+                  max: 100,
+                  valueFormatter: (v: number | null) => (v !== null ? `${v}%` : ""),
+                  tickLabelStyle: { fontSize: 11, fill: "#64748B" },
+                },
+              ]}
+              series={teamLineSeries}
+              height={260}
+              margin={{ top: 20, right: 20, bottom: 35, left: 48 }}
+            />
+          ) : (
+            <div className="text-xs text-outline italic text-center py-12">
+              No team performance metrics recorded yet
+            </div>
+          )}
+        </div>
+
+        {/* Team Legend Breakdown */}
+        <div className="mt-2 pt-3 border-t border-outline-variant/30 flex flex-wrap gap-2 text-[11px]">
+          {teams.map((t, idx) => {
+            const color = TEAM_COLORS[idx % TEAM_COLORS.length];
+            return (
+              <span
+                key={t.id}
+                className="px-2.5 py-1 bg-surface-container rounded-lg border border-outline-variant/30 flex items-center gap-1.5 font-medium text-slate-700"
+              >
+                <span className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span className="font-semibold">{t.name}</span>
+                {t.department && <span className="text-outline text-[10px]">({t.department})</span>}
+              </span>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* All Teams Horizontal Cards */}
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-bold text-on-surface font-headline uppercase tracking-wider text-outline text-xs">
+            All Managed Teams ({teams.length})
+          </h4>
+        </div>
+
+        {teams.length === 0 ? (
+          <div className="text-center py-16 bg-surface-container-lowest rounded-2xl border border-outline-variant/40">
+            <div className="w-12 h-12 rounded-xl bg-slate-100 text-slate-400 flex items-center justify-center mx-auto mb-2">
+              <span className="material-symbols-outlined text-2xl">groups</span>
+            </div>
+            <h4 className="text-body-md font-bold text-on-surface">No Teams Assigned</h4>
+            <p className="text-xs text-on-surface-variant mt-1">No supervised teams found under your manager portfolio.</p>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            {teams.map((team, idx) => {
+              const color = TEAM_COLORS[idx % TEAM_COLORS.length];
+              const members = teamMembers.filter((m) => m.batch_id === team.id);
+              const teamWfs = workflows.filter((w) => w.batch_id === team.id);
+              const teamTasks = tasks.filter((t) => {
+                const s = teamMembers.find((m) => m.id === t.student_id);
+                return s?.batch_id === team.id;
+              });
+              const graded = teamTasks.filter((t) => t.manager_grade !== null && t.manager_grade !== undefined);
+              const avgScore = graded.length > 0 ? Math.round(graded.reduce((a, b) => a + (b.manager_grade || 0), 0) / graded.length) : null;
+
+              return (
+                <div
+                  key={team.id}
+                  className="bg-surface-container-lowest p-5 rounded-2xl border border-outline-variant/40 hover:border-outline-variant transition-all shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4"
+                >
+                  <div className="flex items-center gap-4">
+                    <div
+                      className="w-12 h-12 rounded-xl flex items-center justify-center text-white font-bold text-base shrink-0 shadow-xs"
+                      style={{ backgroundColor: color }}
+                    >
+                      {team.name.charAt(0).toUpperCase()}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <h4 className="text-title-md font-bold text-on-surface font-headline">{team.name}</h4>
+                        {team.department && (
+                          <span className="px-2.5 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-xs font-semibold rounded-md">
+                            {team.department}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-on-surface-variant mt-0.5">
+                        Supervised cohort with {members.length} team members and {teamWfs.length} operational workflows.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center gap-4 self-end md:self-auto shrink-0">
+                    <div className="text-right">
+                      <span className="text-[10px] text-outline uppercase font-semibold block">Average Score</span>
+                      <span className="font-mono font-bold text-sm text-primary">
+                        {avgScore !== null ? `${avgScore}%` : "Pending"}
+                      </span>
+                    </div>
+
+                    <button
+                      onClick={() => {
+                        setSelectedTeamForEval(team);
+                        setMemberSearchQuery("");
+                      }}
+                      className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-xl hover:bg-primary/90 transition-all flex items-center gap-1.5 cursor-pointer shadow-xs"
+                    >
+                      <span>View Members &amp; Give Marks</span>
+                      <span className="material-symbols-outlined text-base">arrow_forward</span>
+                    </button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }

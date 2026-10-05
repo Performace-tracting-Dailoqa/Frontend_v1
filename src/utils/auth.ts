@@ -241,12 +241,18 @@ export async function apiLogin(identifier: string, password: string): Promise<Lo
 export async function fetchMe(): Promise<UserDetail> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}/api/v1/auth/me`;
+  const token = getAuthToken();
+
+  const headers: Record<string, string> = { Accept: "application/json" };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
 
   let response: Response;
   try {
     response = await fetch(url, {
       method: "GET",
-      headers: { Accept: "application/json" },
+      headers,
       credentials: "same-origin",
     });
   } catch {

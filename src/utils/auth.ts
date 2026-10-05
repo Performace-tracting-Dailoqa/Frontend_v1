@@ -72,7 +72,12 @@ export function getApiBaseUrl(): string {
   if (typeof window !== "undefined") {
     return "";
   }
-  return process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000";
+  const base = (
+    process.env.NEXT_PUBLIC_API_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    "http://localhost:8000"
+  ).trim().replace(/\/$/, "");
+  return base.endsWith("/api") ? base.slice(0, -4) : base;
 }
 
 export function getAuthToken(): string | null {

@@ -306,7 +306,7 @@ export default function DashboardTab({
                     color: "#4B2EF5",
                     area: true,
                     curve: "monotoneX",
-                    showMark: true,
+                    showMark: false,
                     label: selectedBatchObj ? `${selectedBatchObj.name} Performance %` : "Avg Performance %",
                   },
                 ]}

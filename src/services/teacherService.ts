@@ -322,3 +322,321 @@ export async function deleteGeneralMetric(
     throw new Error(`Failed to delete metric: ${res.statusText}`);
   }
 }
+
+// ---------------------------------------------------------------------------
+// Japanese Dashboard & Batch/Student Analytics
+// ---------------------------------------------------------------------------
+
+export interface HistoryPoint {
+  date: string;
+  score: number;
+  count?: number;
+  label?: string;
+  kanji?: number;
+  vocab?: number;
+  grammar?: number;
+  listening?: number;
+  speaking?: number;
+  title?: string;
+  type?: string;
+}
+
+export interface SkillBreakdownItem {
+  category: string;
+  average_percentage?: number;
+  score?: number;
+  count?: number;
+  drills_count?: number;
+}
+
+export interface BatchPerformanceItem {
+  batch_id: string;
+  batch_name: string;
+  department: string;
+  student_count: number;
+  average_score: number;
+  evaluations_count: number;
+  performance_history: HistoryPoint[];
+}
+
+export interface TeacherDashboardSummaryResponse {
+  summary: {
+    total_batches: number;
+    total_students: number;
+    overall_avg_score: number;
+    chapters_completed: number;
+    total_evaluations: number;
+    finalized_evaluations: number;
+    jlpt_target: string;
+  };
+  batches: BatchPerformanceItem[];
+  global_history: HistoryPoint[];
+  skill_breakdown: SkillBreakdownItem[];
+}
+
+export interface BatchStudentItem {
+  id: string;
+  user_id: string;
+  name: string;
+  email: string;
+  enrollment_no: string;
+  department: string;
+  status: string;
+  evaluations_count: number;
+  average_score: number;
+  attendance_rate: number;
+  latest_score?: number | null;
+  latest_feedback?: string | null;
+  jlpt_level?: string;
+}
+
+export interface BatchJapaneseDetailsResponse {
+  batch: TeacherBatch;
+  summary: {
+    batch_name: string;
+    department: string;
+    student_count: number;
+    average_score: number;
+    evaluations_count: number;
+  };
+  students: BatchStudentItem[];
+  performance_history: HistoryPoint[];
+  skill_breakdown: SkillBreakdownItem[];
+}
+
+export interface StudentJapaneseEvalItem {
+  id: string;
+  evaluation_title: string;
+  evaluation_type: string;
+  evaluation_date: string;
+  jlpt_level: string;
+  total_score: number | null;
+  max_score: number;
+  percentage: number;
+  status: string;
+  attendance_score: number;
+  feedback: string | null;
+  remarks: string | null;
+  evaluated_at: string | null;
+  metrics: Array<{
+    id: string;
+    category: string;
+    name: string;
+    score: number;
+    full_score: number;
+    proficiency_level?: string;
+    remarks?: string;
+  }>;
+  category_scores: Record<string, number>;
+}
+
+export interface StudentJapaneseAnalyticsResponse {
+  student: {
+    id: string;
+    name: string;
+    email: string;
+    enrollment_no: string;
+    department: string;
+    batch_id: string;
+    batch_name: string;
+    overall_average: number;
+    attendance_rate: number;
+    total_evaluations: number;
+    target_jlpt: string;
+  };
+  performance_trend: HistoryPoint[];
+  skills_breakdown: SkillBreakdownItem[];
+  evaluations_history: StudentJapaneseEvalItem[];
+}
+
+export async function fetchTeacherDashboardSummary(): Promise<TeacherDashboardSummaryResponse> {
+  const res = await fetch("/api/v1/teacher/dashboard-summary", {
+    method: "GET",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch dashboard summary: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchBatchJapaneseDetails(batchId: string): Promise<BatchJapaneseDetailsResponse> {
+  const res = await fetch(`/api/v1/teacher/batches/${batchId}/details`, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch batch details: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function fetchStudentJapaneseAnalytics(studentId: string): Promise<StudentJapaneseAnalyticsResponse> {
+  const res = await fetch(`/api/v1/teacher/students/${studentId}/japanese-analytics`, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch student Japanese analytics: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export interface TeacherFeedbackItem {
+  id: string;
+  title: string;
+  feedback: string;
+  type: string;
+  jlpt_level: string;
+  percentage: number | null;
+  date: string;
+  created_at: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  enrollment_no: string;
+  batch_id: string | null;
+  batch_name: string;
+  is_batch_feedback: boolean;
+}
+
+export interface PostFeedbackPayload {
+  target_type: "batch" | "student";
+  target_id: string;
+  title?: string;
+  feedback: string;
+  rating?: number;
+  jlpt_level?: string;
+}
+
+export async function fetchTeacherFeedbackFeed(batchId?: string, studentId?: string): Promise<TeacherFeedbackItem[]> {
+  const params = new URLSearchParams();
+  if (batchId) params.append("batch_id", batchId);
+  if (studentId) params.append("student_id", studentId);
+
+  const qs = params.toString();
+  const url = `/api/v1/teacher/feedbacks${qs ? `?${qs}` : ""}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch feedback feed: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function postTeacherFeedback(payload: PostFeedbackPayload): Promise<any> {
+  const res = await fetch("/api/v1/teacher/feedbacks", {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || "Failed to post feedback");
+  }
+  return res.json();
+}
+
+export interface JapaneseMetricInput {
+  category: string;
+  name: string;
+  score: number;
+  full_score?: number;
+  weightage?: number;
+  proficiency_level?: string;
+  remarks?: string;
+}
+
+export interface CreateJapaneseEvaluationPayload {
+  evaluation_title: string;
+  evaluation_type: string;
+  jlpt_level: string;
+  evaluation_date?: string;
+  percentage?: number;
+  total_score?: number;
+  max_score?: number;
+  attendance_score?: number;
+  status?: string;
+  feedback?: string;
+  remarks?: string;
+  batch_id?: string;
+  metrics?: JapaneseMetricInput[];
+}
+
+export async function createStudentJapaneseEvaluation(
+  studentId: string,
+  payload: CreateJapaneseEvaluationPayload
+): Promise<any> {
+  const res = await fetch(`/api/v1/teacher/students/${studentId}/japanese-evaluations`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(payload),
+  });
+  if (!res.ok) {
+    const errorData = await res.json().catch(() => null);
+    throw new Error(
+      errorData?.detail?.message ||
+        errorData?.detail ||
+        `Failed to save Japanese evaluation: ${res.statusText}`
+    );
+  }
+  return res.json();
+}
+
+export interface TeacherEvaluationHistoryItem {
+  id: string;
+  student_id: string;
+  student_name: string;
+  student_email: string;
+  enrollment_no: string;
+  batch_id: string | null;
+  batch_name: string;
+  evaluation_title: string;
+  evaluation_type: string;
+  jlpt_level: string;
+  evaluation_date: string;
+  evaluated_at: string;
+  total_score: number | null;
+  max_score: number;
+  percentage: number;
+  attendance_score: number;
+  status: string;
+  feedback: string;
+  remarks: string;
+  metrics: Array<{
+    id?: string;
+    category: string;
+    name: string;
+    score: number;
+    full_score: number;
+    proficiency_level?: string;
+    remarks?: string;
+  }>;
+  category_scores: Record<string, number>;
+}
+
+export async function fetchTeacherEvaluationHistory(
+  batchId?: string,
+  studentId?: string
+): Promise<TeacherEvaluationHistoryItem[]> {
+  const params = new URLSearchParams();
+  if (batchId) params.append("batch_id", batchId);
+  if (studentId) params.append("student_id", studentId);
+
+  const qs = params.toString();
+  const url = `/api/v1/teacher/evaluations/history${qs ? `?${qs}` : ""}`;
+  const res = await fetch(url, {
+    method: "GET",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    throw new Error(`Failed to fetch evaluation history: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+
+
+

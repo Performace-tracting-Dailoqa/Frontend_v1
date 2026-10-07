@@ -426,6 +426,81 @@ export async function fetchStudentEvaluations(): Promise<{ total: number; items:
 }
 
 // ---------------------------------------------------------------------------
+// Student Feedback & Comments (/api/v1/student/feedbacks)
+// ---------------------------------------------------------------------------
+
+export interface FeedbackCommentItem {
+  id: string;
+  feedback_id?: string;
+  author_name: string;
+  author_role: string;
+  comment: string;
+  created_at: string;
+}
+
+export interface StudentFeedbackItem {
+  id: string;
+  reviewer_name: string;
+  reviewer_role: string;
+  reviewer_type: "teacher" | "manager";
+  reviewer_email?: string;
+  topic: string;
+  feedback: string;
+  rating_score?: number | null;
+  rating_badge: string;
+  rating_type: "exceeds" | "on-track" | "needs-work";
+  type: string;
+  jlpt_level?: string;
+  created_at: string;
+  date: string;
+  tags: string[];
+  comments: FeedbackCommentItem[];
+  pending_acknowledgement?: boolean;
+  acknowledged_by?: string;
+  acknowledged_at?: string;
+}
+
+export interface StudentFeedbacksResponse {
+  total: number;
+  feedbacks: StudentFeedbackItem[];
+  stats: {
+    total: number;
+    teacher_feedbacks: number;
+    manager_feedbacks: number;
+  };
+}
+
+export async function fetchStudentFeedbacks(): Promise<StudentFeedbacksResponse> {
+  const res = await fetch("/api/v1/student/feedbacks", {
+    headers: getHeaders(),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch feedbacks (${res.status})`);
+  }
+  return await res.json();
+}
+
+export async function postStudentFeedbackComment(
+  feedbackId: string,
+  comment: string
+): Promise<{ success: boolean; comment: FeedbackCommentItem; message: string }> {
+  const res = await fetch(`/api/v1/student/feedbacks/${feedbackId}/comments`, {
+    method: "POST",
+    headers: getHeaders(),
+    credentials: "same-origin",
+    body: JSON.stringify({ comment }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to post feedback comment (${res.status})`);
+  }
+  return await res.json();
+}
+
+// ---------------------------------------------------------------------------
 // Teacher Workflows (/api/v1/teacher)
 // ---------------------------------------------------------------------------
 

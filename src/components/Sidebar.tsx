@@ -25,7 +25,6 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
         items: [
           { label: "My Performance", href: "/student/dashboard", icon: "trending_up" },
           { label: "Learning Progress", href: "/student/learning-progress", icon: "school" },
-          { label: "Evaluations", href: "/student/evaluations", icon: "rate_review" },
           { label: "Feedback", href: "/student/feedback", icon: "forum" },
           { label: "Reports", href: "/student/reports", icon: "summarize" },
           { label: "Mentors", href: "/student/mentors", icon: "groups" },

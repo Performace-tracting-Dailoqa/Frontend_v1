@@ -29,7 +29,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     unread: true,
     priority: "urgent",
     actionLabel: "Complete Self-Evaluation",
-    actionHref: "/student/evaluations",
+    actionHref: "/student/learning-progress",
   },
   {
     id: "notif-2",
@@ -51,7 +51,7 @@ const INITIAL_NOTIFICATIONS: NotificationItem[] = [
     timeGroup: "Today",
     unread: true,
     actionLabel: "View Evaluation Status",
-    actionHref: "/student/evaluations",
+    actionHref: "/student/learning-progress",
   },
   {
     id: "notif-4",

@@ -20,7 +20,6 @@ const NAV_ITEMS = [
   { name: "Attendance", href: "/student/attendance", icon: "calendar_today" },
   { name: "My Mentors", href: "/student/mentors", icon: "group" },
   { name: "Learning Progress", href: "/student/learning-progress", icon: "trending_up" },
-  { name: "Evaluations", href: "/student/evaluations", icon: "assignment" },
   { name: "Feedback", href: "/student/feedback", icon: "rate_review" },
   { name: "Reports", href: "/student/reports", icon: "bar_chart" },
   { name: "Notifications", href: "/student/notifications", icon: "notifications" },

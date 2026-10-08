@@ -224,14 +224,14 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
             </div>
           </div>
 
-          {/* Controls: Timeframe (Week/Month) + Month Dropdown + Batch Filter */}
-          <div className="flex flex-wrap items-center gap-2.5">
+          {/* Controls: Timeframe (Week/Month) + Month Dropdown + Batch Filter in One Single Row */}
+          <div className="flex items-center flex-nowrap gap-2 shrink-0 overflow-x-auto pb-1 sm:pb-0">
             {/* Week / Month Toggle */}
-            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs">
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/80 shadow-2xs shrink-0">
               <button
                 type="button"
                 onClick={() => setTimeframe("week")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   timeframe === "week"
                     ? "bg-white text-[#4B2EF5] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -242,7 +242,7 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
               <button
                 type="button"
                 onClick={() => setTimeframe("month")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   timeframe === "month"
                     ? "bg-white text-[#4B2EF5] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -253,7 +253,7 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
               <button
                 type="button"
                 onClick={() => setTimeframe("all")}
-                className={`px-3 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer ${
+                className={`px-2.5 py-1 text-xs font-semibold rounded-lg transition-all cursor-pointer whitespace-nowrap ${
                   timeframe === "all"
                     ? "bg-white text-[#4B2EF5] shadow-xs"
                     : "text-slate-600 hover:text-slate-900"
@@ -264,15 +264,15 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
             </div>
 
             {/* Month Dropdown */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 shadow-2xs">
-              <span className="material-symbols-outlined text-sm text-[#4B2EF5]">calendar_month</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 shadow-2xs shrink-0">
+              <span className="material-symbols-outlined text-sm text-[#4B2EF5] shrink-0">calendar_month</span>
               <select
                 value={selectedMonth}
                 onChange={(e) => {
                   setSelectedMonth(e.target.value);
                   setTimeframe("month");
                 }}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1 whitespace-nowrap"
                 aria-label="Filter progress by month"
               >
                 {availableMonths.map((m) => (
@@ -284,12 +284,12 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
             </div>
 
             {/* Batch Filter Dropdown */}
-            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 shadow-2xs">
-              <span className="material-symbols-outlined text-sm text-[#4B2EF5]">school</span>
+            <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-slate-50 border border-slate-200/80 rounded-xl text-xs font-medium text-slate-700 shadow-2xs shrink-0 max-w-[240px]">
+              <span className="material-symbols-outlined text-sm text-[#4B2EF5] shrink-0">school</span>
               <select
                 value={selectedBatchFilter}
                 onChange={(e) => setSelectedBatchFilter(e.target.value)}
-                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1"
+                className="bg-transparent text-xs font-semibold text-slate-800 focus:outline-none cursor-pointer pr-1 truncate w-full"
                 aria-label="Filter progress by batch"
               >
                 <option value="all">All Batches Combined ({batchesPerformance.length})</option>

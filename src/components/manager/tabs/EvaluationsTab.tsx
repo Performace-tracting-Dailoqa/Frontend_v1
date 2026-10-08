@@ -894,6 +894,23 @@ export default function EvaluationsTab({
                 </div>
               )}
 
+              {isGeneralAlreadyEvaluated && (
+                <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between animate-in fade-in">
+                  <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-amber-600 text-xl shrink-0">event_busy</span>
+                    <div>
+                      <p className="font-bold">Already Evaluated on {generalEvalDate}</p>
+                      <p className="text-[11px] text-amber-800 mt-0.5">
+                        {selectedPersonForEval.name} has already received general appraisal marks for this date. Only 1 evaluation per person is allowed in one day.
+                      </p>
+                    </div>
+                  </div>
+                  <span className="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase shrink-0">
+                    Daily Limit Reached
+                  </span>
+                </div>
+              )}
+
               <form onSubmit={handleSaveGeneralEvaluation} className="space-y-5">
                 {/* Overall Score & Classification */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-surface-container/30 rounded-xl border border-outline-variant/30">
@@ -906,18 +923,20 @@ export default function EvaluationsTab({
                         type="range"
                         min="0"
                         max="100"
+                        disabled={isGeneralAlreadyEvaluated}
                         value={generalOverallRating}
                         onChange={(e) => setGeneralOverallRating(Number(e.target.value))}
-                        className="w-full accent-primary cursor-pointer"
+                        className="w-full accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       />
                       <div className="flex items-center gap-1 min-w-[70px]">
                         <input
                           type="number"
                           min="0"
                           max="100"
+                          disabled={isGeneralAlreadyEvaluated}
                           value={generalOverallRating}
                           onChange={(e) => setGeneralOverallRating(Math.max(0, Math.min(100, Number(e.target.value))))}
-                          className="w-14 px-1.5 py-0.5 bg-surface-container text-center font-mono font-bold text-xs rounded-md border border-outline-variant/40"
+                          className="w-14 px-1.5 py-0.5 bg-surface-container text-center font-mono font-bold text-xs rounded-md border border-outline-variant/40 disabled:opacity-60"
                         />
                         <span className="text-xs font-mono text-outline">/100</span>
                       </div>
@@ -930,8 +949,9 @@ export default function EvaluationsTab({
                     </label>
                     <select
                       value={generalPerformanceLevel}
+                      disabled={isGeneralAlreadyEvaluated}
                       onChange={(e) => setGeneralPerformanceLevel(e.target.value)}
-                      className="w-full px-3 py-2 bg-surface-container-lowest text-xs font-semibold rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
+                      className="w-full px-3 py-2 bg-surface-container-lowest text-xs font-semibold rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
                     >
                       <option value="Exceeds Expectations">Exceeds Expectations (High Performer)</option>
                       <option value="Meets Expectations">Meets Expectations (Consistent Delivery)</option>
@@ -975,6 +995,7 @@ export default function EvaluationsTab({
                             type="range"
                             min="0"
                             max="100"
+                            disabled={isGeneralAlreadyEvaluated}
                             value={comp.score}
                             onChange={(e) => {
                               const val = Number(e.target.value);
@@ -982,13 +1003,14 @@ export default function EvaluationsTab({
                                 prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
                               );
                             }}
-                            className="w-32 sm:w-44 accent-primary cursor-pointer"
+                            className="w-32 sm:w-44 accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                           />
                           <div className="flex items-center gap-1">
                             <input
                               type="number"
                               min="0"
                               max="100"
+                              disabled={isGeneralAlreadyEvaluated}
                               value={comp.score}
                               onChange={(e) => {
                                 const val = Math.max(0, Math.min(100, Number(e.target.value)));
@@ -996,7 +1018,7 @@ export default function EvaluationsTab({
                                   prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
                                 );
                               }}
-                              className="w-14 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-primary"
+                              className="w-14 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-primary disabled:opacity-60"
                             />
                             <span className="font-mono text-xs text-outline">/ 100</span>
                           </div>
@@ -1014,10 +1036,11 @@ export default function EvaluationsTab({
                     </label>
                     <textarea
                       rows={3}
+                      disabled={isGeneralAlreadyEvaluated}
                       value={generalStrengths}
                       onChange={(e) => setGeneralStrengths(e.target.value)}
                       placeholder="e.g. Strong analytical problem solving, clean code architecture, prompt execution..."
-                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
                     />
                   </div>
 
@@ -1027,10 +1050,11 @@ export default function EvaluationsTab({
                     </label>
                     <textarea
                       rows={3}
+                      disabled={isGeneralAlreadyEvaluated}
                       value={generalAreasOfGrowth}
                       onChange={(e) => setGeneralAreasOfGrowth(e.target.value)}
                       placeholder="e.g. Expand automated test coverage, participate in team architecture discussions..."
-                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
                     />
                   </div>
                 </div>
@@ -1041,10 +1065,11 @@ export default function EvaluationsTab({
                   </label>
                   <textarea
                     rows={3}
+                    disabled={isGeneralAlreadyEvaluated}
                     value={generalSummaryFeedback}
                     onChange={(e) => setGeneralSummaryFeedback(e.target.value)}
                     placeholder="General appraisal summary, mentor guidance, and targets for the next evaluation date..."
-                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
                   />
                 </div>
 
@@ -1066,7 +1091,7 @@ export default function EvaluationsTab({
                     disabled={isGeneralAlreadyEvaluated || isSavingGeneral}
                     className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-2 ${
                       isGeneralAlreadyEvaluated
-                        ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75"
+                        ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75 shadow-none"
                         : "bg-primary text-white hover:bg-primary/90 cursor-pointer disabled:opacity-50"
                     }`}
                     title={isGeneralAlreadyEvaluated ? "Grades can only be given once a day for this student" : "Submit appraisal marks"}
@@ -1079,7 +1104,7 @@ export default function EvaluationsTab({
                     </span>
                     <span>
                       {isGeneralAlreadyEvaluated
-                        ? `Marks Locked for ${generalEvalDate}`
+                        ? `Marks Locked for ${generalEvalDate} (1/Day Limit)`
                         : `Submit General Marks for ${generalEvalDate}`}
                     </span>
                   </button>
@@ -1299,6 +1324,23 @@ export default function EvaluationsTab({
                     </div>
                   )}
 
+                  {isTaskAlreadyEvaluated && (
+                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between animate-in fade-in">
+                      <div className="flex items-center gap-2.5">
+                        <span className="material-symbols-outlined text-amber-600 text-xl shrink-0">event_busy</span>
+                        <div>
+                          <p className="font-bold">Already Evaluated on {workflowEvalDate}</p>
+                          <p className="text-[11px] text-amber-800 mt-0.5">
+                            {selectedPersonForEval.name} has already received deliverable marks for this task on {workflowEvalDate}. Only 1 evaluation per person is allowed in one day.
+                          </p>
+                        </div>
+                      </div>
+                      <span className="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase shrink-0">
+                        1 / Day Limit Reached
+                      </span>
+                    </div>
+                  )}
+
                   {/* Rubric Metrics Table */}
                   <form onSubmit={handleSubmitTaskEval} className="space-y-5">
                     <div className="overflow-x-auto">
@@ -1332,6 +1374,7 @@ export default function EvaluationsTab({
                                     type="number"
                                     min="0"
                                     max={row.full_score}
+                                    disabled={isTaskAlreadyEvaluated}
                                     value={row.manager_score}
                                     onChange={(e) => {
                                       const val = Math.max(0, Math.min(row.full_score, Number(e.target.value)));
@@ -1339,7 +1382,7 @@ export default function EvaluationsTab({
                                         prev.map((r, i) => (i === idx ? { ...r, manager_score: val } : r))
                                       );
                                     }}
-                                    className="w-16 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-xs"
+                                    className="w-16 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                                   />
                                   <span className="text-outline text-[11px]">/{row.full_score}</span>
                                 </div>
@@ -1351,6 +1394,7 @@ export default function EvaluationsTab({
                                 <input
                                   type="text"
                                   placeholder="Specific feedback..."
+                                  disabled={isTaskAlreadyEvaluated}
                                   value={row.manager_remarks || ""}
                                   onChange={(e) => {
                                     const val = e.target.value;
@@ -1358,7 +1402,7 @@ export default function EvaluationsTab({
                                       prev.map((r, i) => (i === idx ? { ...r, manager_remarks: val } : r))
                                     );
                                   }}
-                                  className="w-full px-2 py-1 bg-surface-container text-xs rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary"
+                                  className="w-full px-2 py-1 bg-surface-container text-xs rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
                                 />
                               </td>
                             </tr>
@@ -1374,10 +1418,11 @@ export default function EvaluationsTab({
                       </label>
                       <textarea
                         rows={3}
+                        disabled={isTaskAlreadyEvaluated}
                         value={managerRemarks}
                         onChange={(e) => setManagerRemarks(e.target.value)}
                         placeholder="Comprehensive feedback on deliverable code quality, design adherence, and execution..."
-                        className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
+                        className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60 disabled:cursor-not-allowed"
                       />
                     </div>
 
@@ -1410,7 +1455,7 @@ export default function EvaluationsTab({
                         disabled={isTaskAlreadyEvaluated || isSubmittingEval || isLoadingTaskEval}
                         className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
                           isTaskAlreadyEvaluated
-                            ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75"
+                            ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75 shadow-none"
                             : "bg-primary text-white hover:bg-primary/90 cursor-pointer disabled:opacity-50"
                         }`}
                         title={isTaskAlreadyEvaluated ? "Task marks can only be given once a day" : "Submit task marks"}
@@ -1423,7 +1468,7 @@ export default function EvaluationsTab({
                         </span>
                         <span>
                           {isTaskAlreadyEvaluated
-                            ? `Marks Submitted for ${workflowEvalDate}`
+                            ? `Marks Locked for ${workflowEvalDate} (1/Day Limit)`
                             : `Submit Marks (${workflowEvalDate})`}
                         </span>
                       </button>

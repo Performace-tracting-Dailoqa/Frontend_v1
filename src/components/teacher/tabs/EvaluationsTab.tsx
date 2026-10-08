@@ -108,6 +108,60 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
   const [feedback, setFeedback] = useState("");
   const [remarks, setRemarks] = useState("");
   const [metrics, setMetrics] = useState<JapaneseCategoryMetric[]>(DEFAULT_METRICS);
+  const [activeWorkflowContext, setActiveWorkflowContext] = useState<{
+    workflowId?: string;
+    workflowName?: string;
+    batchName?: string;
+  } | null>(null);
+
+  // Check if navigating from a workflow with scoped metrics
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const raw = localStorage.getItem("teacher_active_eval_metrics");
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (
+          parsed?.selectedMetrics &&
+          Array.isArray(parsed.selectedMetrics) &&
+          parsed.selectedMetrics.length > 0
+        ) {
+          setActiveWorkflowContext({
+            workflowId: parsed.workflowId,
+            workflowName: parsed.workflowName,
+            batchName: parsed.batchName,
+          });
+          if (parsed.workflowName) {
+            setEvalTitle(`${parsed.workflowName} Assessment`);
+          }
+
+          const mappedMetrics: JapaneseCategoryMetric[] = parsed.selectedMetrics.map((sm: any) => ({
+            category: sm.category || "Japanese",
+            jpName: sm.jpName || `${sm.category} (日本語)`,
+            name: sm.name || `${sm.category} Proficiency`,
+            score: Math.round((sm.full_score || 20) * 0.8),
+            full_score: sm.full_score || 20,
+            weightage: sm.weightage || 1.0,
+            remarks: `Evaluation for ${sm.name || sm.category}.`,
+            color: sm.color || "from-indigo-500 to-purple-600",
+            icon: sm.icon || "spellcheck",
+          }));
+          setMetrics(mappedMetrics);
+        }
+      } catch (e) {
+        console.warn("Failed to parse workflow active eval metrics:", e);
+      }
+    }
+  }, []);
+
+  const handleResetToStandardRubric = () => {
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("teacher_active_eval_metrics");
+    }
+    setActiveWorkflowContext(null);
+    setMetrics(DEFAULT_METRICS);
+    setEvalTitle(`JLPT ${jlptLevel} ${evalType.toUpperCase()}`);
+  };
 
   // Load batches and students
   useEffect(() => {
@@ -166,7 +220,9 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
     if (selectedStudent) {
       loadStudentJapaneseHistory(selectedStudent.id);
       // Auto-update assessment title
-      setEvalTitle(`JLPT ${jlptLevel} ${evalType.toUpperCase()} - ${selectedStudent.full_name || selectedStudent.name}`);
+      if (!activeWorkflowContext) {
+        setEvalTitle(`JLPT ${jlptLevel} ${evalType.toUpperCase()} - ${selectedStudent.full_name || selectedStudent.name}`);
+      }
     } else {
       setStudentAnalytics(null);
     }
@@ -192,7 +248,8 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
   // Metric update handler
   const handleMetricScoreChange = (index: number, newScore: number) => {
     const updated = [...metrics];
-    updated[index].score = Math.max(0, Math.min(100, newScore));
+    const maxScore = updated[index].full_score || 100;
+    updated[index].score = Math.max(0, Math.min(maxScore, newScore));
     setMetrics(updated);
   };
 
@@ -235,6 +292,50 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
     );
   }, [studentAnalytics, evalDate]);
 
+  // Synchronize form values when an existing evaluation exists on the selected date
+  useEffect(() => {
+    if (existingEvalForDate) {
+      if (existingEvalForDate.evaluation_title) {
+        setEvalTitle(existingEvalForDate.evaluation_title);
+      }
+      if (existingEvalForDate.evaluation_type) {
+        setEvalType(existingEvalForDate.evaluation_type as any);
+      }
+      if (existingEvalForDate.jlpt_level) {
+        setJlptLevel(existingEvalForDate.jlpt_level as any);
+      }
+      if (existingEvalForDate.feedback) {
+        setFeedback(existingEvalForDate.feedback);
+      }
+      if (existingEvalForDate.remarks) {
+        setRemarks(existingEvalForDate.remarks);
+      }
+      if (existingEvalForDate.attendance_score !== undefined) {
+        setAttendanceScore(existingEvalForDate.attendance_score);
+      }
+      if (existingEvalForDate.metrics && existingEvalForDate.metrics.length > 0) {
+        setMetrics((prev) =>
+          prev.map((m) => {
+            const found = existingEvalForDate.metrics.find(
+              (em) =>
+                em.category.toLowerCase() === m.category.toLowerCase() ||
+                em.name.toLowerCase() === m.name.toLowerCase()
+            );
+            if (found) {
+              return {
+                ...m,
+                score: found.score,
+                full_score: found.full_score || m.full_score,
+                remarks: found.remarks || m.remarks,
+              };
+            }
+            return m;
+          })
+        );
+      }
+    }
+  }, [existingEvalForDate]);
+
   // Save Japanese Evaluation to PostgreSQL
   const handleSaveEvaluation = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -242,15 +343,6 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
       setStatusMessage({ type: "error", text: "Please select a student to evaluate." });
       return;
     }
-
-    if (existingEvalForDate) {
-      setStatusMessage({
-        type: "error",
-        text: `Learner has already been evaluated on ${evalDate} (Score: ${existingEvalForDate.percentage}%). Teachers can only evaluate a learner once per day.`,
-      });
-      return;
-    }
-
 
     setIsSaving(true);
     setStatusMessage(null);
@@ -284,15 +376,13 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
 
       setStatusMessage({
         type: "success",
-        text: `Japanese evaluation saved to database for ${selectedStudent.full_name || selectedStudent.name}! Grade: ${computedPercentage}%.`,
+        text: existingEvalForDate
+          ? `Updated Japanese evaluation for ${selectedStudent.full_name || selectedStudent.name}! Score: ${computedPercentage}%.`
+          : `Japanese evaluation saved to database for ${selectedStudent.full_name || selectedStudent.name}! Grade: ${computedPercentage}%.`,
       });
 
       // Reload student Japanese analytics
       await loadStudentJapaneseHistory(selectedStudent.id);
-
-      // Clear feedback input but keep state
-      setFeedback("");
-      setRemarks("");
     } catch (err: any) {
       console.error("Failed to save Japanese evaluation:", err);
       setStatusMessage({
@@ -565,18 +655,18 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
                 </div>
 
                 {existingEvalForDate && (
-                  <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between animate-in fade-in">
+                  <div className="p-4 rounded-xl bg-indigo-50 border border-indigo-200 text-indigo-950 text-xs font-medium flex items-center justify-between animate-in fade-in">
                     <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-amber-600 text-xl shrink-0">event_busy</span>
+                      <span className="material-symbols-outlined text-[#4B2EF5] text-xl shrink-0">edit_note</span>
                       <div>
-                        <p className="font-bold">Already Evaluated on {evalDate}</p>
-                        <p className="text-[11px] text-amber-800 mt-0.5">
-                          {selectedStudent.full_name || selectedStudent.name} already has a recorded assessment ({existingEvalForDate.percentage}% - &quot;{existingEvalForDate.evaluation_title}&quot;) for this date.
+                        <p className="font-bold text-[#4B2EF5]">Viewing &amp; Editing Recorded Evaluation on {evalDate}</p>
+                        <p className="text-[11px] text-slate-600 mt-0.5">
+                          {selectedStudent.full_name || selectedStudent.name} has a recorded assessment ({existingEvalForDate.percentage}% - &quot;{existingEvalForDate.evaluation_title}&quot;). Modifying marks and saving will update this evaluation in-place.
                         </p>
                       </div>
                     </div>
-                    <span className="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase shrink-0">
-                      Daily Limit Reached
+                    <span className="px-2.5 py-1 rounded-lg bg-indigo-100 text-[#4B2EF5] font-bold text-[10px] uppercase shrink-0 border border-indigo-200">
+                      Update Mode (1/Day)
                     </span>
                   </div>
                 )}
@@ -637,14 +727,40 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
 
               {/* Japanese Category Skill Rubrics */}
               <div className="bg-surface-container-lowest p-6 rounded-2xl border border-outline-variant/40 shadow-xs space-y-4">
+                {activeWorkflowContext && (
+                  <div className="p-3.5 rounded-xl bg-indigo-50 border border-indigo-200 flex items-center justify-between gap-3 text-xs text-indigo-900 animate-in fade-in">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="material-symbols-outlined text-[#4B2EF5] text-lg shrink-0">account_tree</span>
+                      <div className="min-w-0">
+                        <span className="font-bold text-[#4B2EF5]">Workflow Scoped Rubric: </span>
+                        <span className="font-semibold text-slate-800">{activeWorkflowContext.workflowName}</span>
+                        <span className="text-slate-500 ml-1">
+                          — Showing only the {metrics.length} selected Japanese metrics for this workflow.
+                        </span>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleResetToStandardRubric}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-50 border border-indigo-200 text-[#4B2EF5] text-[11px] font-bold shrink-0 cursor-pointer shadow-2xs"
+                    >
+                      Reset to Standard Rubric
+                    </button>
+                  </div>
+                )}
+
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="font-headline font-bold text-sm text-on-surface flex items-center gap-2">
                       <span className="material-symbols-outlined text-primary text-base">spellcheck</span>
-                      <span>Japanese Skill Competency Rubrics (5 Core Areas)</span>
+                      <span>
+                        {activeWorkflowContext ? "Workflow Japanese Rubric" : "Japanese Skill Competency Rubrics"} ({metrics.length} Metrics)
+                      </span>
                     </h3>
                     <p className="text-xs text-on-surface-variant mt-0.5">
-                      Score learner performance from 0 to 100 for each core Japanese language pillar.
+                      {activeWorkflowContext
+                        ? "Grading learner on the specific Japanese metrics configured for this workflow."
+                        : "Score learner performance for each core Japanese language pillar."}
                     </p>
                   </div>
                   <span className="text-xs font-bold text-primary">
@@ -653,58 +769,61 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
                 </div>
 
                 <div className="space-y-4">
-                  {metrics.map((metric, idx) => (
-                    <div
-                      key={metric.category}
-                      className="p-4 rounded-xl border border-outline-variant/40 bg-surface-container/20 hover:border-primary/40 transition-all space-y-3"
-                    >
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                        <div className="flex items-center gap-2.5">
-                          <div className={`w-8 h-8 rounded-lg bg-gradient-to-tr ${metric.color} text-white flex items-center justify-center shrink-0`}>
-                            <span className="material-symbols-outlined text-base">{metric.icon}</span>
+                  {metrics.map((metric, idx) => {
+                    const maxScore = metric.full_score || 100;
+                    return (
+                      <div
+                        key={metric.category + idx}
+                        className="p-4 rounded-xl border border-outline-variant/40 bg-surface-container/20 hover:border-primary/40 transition-all space-y-3"
+                      >
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <div className="flex items-center gap-2.5">
+                            <div className={`w-8 h-8 rounded-lg bg-gradient-to-tr ${metric.color} text-white flex items-center justify-center shrink-0`}>
+                              <span className="material-symbols-outlined text-base">{metric.icon}</span>
+                            </div>
+                            <div>
+                              <h4 className="font-bold text-xs text-on-surface">{metric.jpName}</h4>
+                              <p className="text-[11px] text-outline">{metric.name}</p>
+                            </div>
                           </div>
-                          <div>
-                            <h4 className="font-bold text-xs text-on-surface">{metric.jpName}</h4>
-                            <p className="text-[11px] text-outline">{metric.name}</p>
-                          </div>
-                        </div>
 
-                        {/* Interactive Score & Slider */}
-                        <div className="flex items-center gap-3">
-                          <input
-                            type="range"
-                            min="0"
-                            max="100"
-                            value={metric.score}
-                            onChange={(e) => handleMetricScoreChange(idx, Number(e.target.value))}
-                            className="w-32 accent-primary cursor-pointer"
-                          />
-                          <div className="flex items-center gap-1">
+                          {/* Interactive Score & Slider */}
+                          <div className="flex items-center gap-3">
                             <input
-                              type="number"
+                              type="range"
                               min="0"
-                              max="100"
+                              max={maxScore}
                               value={metric.score}
                               onChange={(e) => handleMetricScoreChange(idx, Number(e.target.value))}
-                              className="w-16 px-2 py-1 bg-surface-container border border-outline-variant/50 rounded-lg text-center font-bold text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              className="w-32 accent-primary cursor-pointer"
                             />
-                            <span className="text-xs font-semibold text-outline">/ 100</span>
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                min="0"
+                                max={maxScore}
+                                value={metric.score}
+                                onChange={(e) => handleMetricScoreChange(idx, Number(e.target.value))}
+                                className="w-16 px-2 py-1 bg-surface-container border border-outline-variant/50 rounded-lg text-center font-bold text-xs text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
+                              />
+                              <span className="text-xs font-semibold text-outline">/ {maxScore}</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
 
-                      {/* Criterion Remarks */}
-                      <div>
-                        <input
-                          type="text"
-                          value={metric.remarks}
-                          onChange={(e) => handleMetricRemarkChange(idx, e.target.value)}
-                          placeholder={`Mentor note for ${metric.category}...`}
-                          className="w-full px-3 py-1.5 bg-surface-container/60 border border-outline-variant/30 rounded-lg text-[11px] text-on-surface focus:outline-none focus:ring-1 focus:ring-primary/30"
-                        />
+                        {/* Criterion Remarks */}
+                        <div>
+                          <input
+                            type="text"
+                            value={metric.remarks}
+                            onChange={(e) => handleMetricRemarkChange(idx, e.target.value)}
+                            placeholder={`Mentor note for ${metric.category}...`}
+                            className="w-full px-3 py-1.5 bg-surface-container/60 border border-outline-variant/30 rounded-lg text-[11px] text-on-surface focus:outline-none focus:ring-1 focus:ring-primary/30"
+                          />
+                        </div>
                       </div>
-                    </div>
-                  ))}
+                    );
+                  })}
                 </div>
               </div>
 
@@ -747,8 +866,9 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
                 <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-outline-variant/30">
                   <div className="text-xs text-outline">
                     {existingEvalForDate ? (
-                      <span className="text-amber-700 font-semibold">
-                        Already evaluated on {evalDate}. Only 1 evaluation allowed per day.
+                      <span className="text-indigo-700 font-semibold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">sync</span>
+                        <span>Saving will update this learner&apos;s evaluation for {evalDate} with new score ({computedPercentage}%).</span>
                       </span>
                     ) : (
                       <span>
@@ -759,12 +879,8 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
 
                   <button
                     type="submit"
-                    disabled={isSaving || !!existingEvalForDate}
-                    className={`px-6 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-2 ${
-                      existingEvalForDate
-                        ? "bg-slate-200 text-slate-400 cursor-not-allowed border border-slate-300 shadow-none"
-                        : "bg-primary hover:bg-primary/90 text-white cursor-pointer disabled:opacity-50"
-                    }`}
+                    disabled={isSaving}
+                    className="px-6 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-2 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white cursor-pointer disabled:opacity-50"
                   >
                     {isSaving ? (
                       <>
@@ -773,8 +889,8 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
                       </>
                     ) : existingEvalForDate ? (
                       <>
-                        <span className="material-symbols-outlined text-base">lock</span>
-                        <span>Already Evaluated for {evalDate} (1/Day Limit)</span>
+                        <span className="material-symbols-outlined text-base">edit</span>
+                        <span>Update Japanese Evaluation ({computedPercentage}%)</span>
                       </>
                     ) : (
                       <>

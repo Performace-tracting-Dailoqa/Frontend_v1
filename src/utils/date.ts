@@ -98,7 +98,7 @@ export function computeTimelineData(
   // If user selected "all", return raw sessions
   if (timeframe === "all") {
     const labels = sorted.map((p) => p.date.slice(5)); // MM-DD
-    const scores = sorted.map((p) => p.score);
+    const scores = sorted.map((p) => Math.min(100, Math.max(0, p.score)));
     const minVal = Math.max(0, Math.min(...scores) - 10);
     return {
       labels,
@@ -109,7 +109,7 @@ export function computeTimelineData(
 
   const scoreMap = new Map<string, number>();
   sorted.forEach((p) => {
-    scoreMap.set(p.date.slice(0, 10), p.score);
+    scoreMap.set(p.date.slice(0, 10), Math.min(100, Math.max(0, p.score)));
   });
 
   // Handle Specific Selected Month View

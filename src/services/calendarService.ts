@@ -2,24 +2,12 @@
 
 import { apiJson, ApiError, errorMessage } from "./apiClient";
 
-/**
- * Microsoft 365 Calendar client for the Superuser **Microsoft Calendar** page.
- *
- * The PMS signs users in with Microsoft identity but never stores a Microsoft
- * refresh token, so the calendar is read server-side with the Entra app-only
- * flow against one configured mailbox. That means the page has three honest
- * states, all handled here:
- *   - `configured: false`  -> no mailbox set; the user must set the env var
- *   - `configured: true, connected: false` -> set, but Graph is unreachable or
- *     the app is missing the `Calendars.Read` application permission
- *   - `connected: true`    -> events are live
- */
-
 export interface CalendarStatus {
   configured: boolean;
   connected: boolean;
   mailbox: string | null;
   calendar_name?: string | null;
+  has_delegated_auth?: boolean;
   code: string | null;
   message: string | null;
 }
@@ -41,6 +29,8 @@ export interface CalendarEvent {
   show_as: string | null;
   categories: string[];
   response_status: string | null;
+  importance?: string;
+  web_link?: string | null;
 }
 
 export interface CalendarEventsResponse {
@@ -51,17 +41,57 @@ export interface CalendarEventsResponse {
   events: CalendarEvent[];
 }
 
+export interface CalendarTask {
+  id: string;
+  title: string;
+  status: string;
+  is_completed: boolean;
+  importance: string;
+  due_date: string | null;
+  created_at: string | null;
+  list_name: string;
+}
+
+export interface CalendarTasksResponse {
+  total: number;
+  tasks: CalendarTask[];
+}
+
+export interface CreateEventPayload {
+  subject: string;
+  start: string;
+  end: string;
+  is_all_day?: boolean;
+  time_zone?: string;
+  location?: string;
+  body?: string;
+  is_online_meeting?: boolean;
+  show_as?: string;
+  categories?: string[];
+}
+
+export interface CreateTaskPayload {
+  title: string;
+  due_date?: string;
+  importance?: string;
+}
+
 /** Stable, user-facing explanation for each calendar failure code. */
 const STATUS_HINTS: Record<string, string> = {
+  NOT_CONNECTED:
+    "Connect your Microsoft 365 account to synchronize your live Outlook calendar events, Teams meetings, and To-Do tasks.",
+  TOKEN_EXPIRED:
+    "Your Microsoft session has expired. Re-connect to refresh calendar permissions.",
   CALENDAR_NOT_CONFIGURED:
-    "Set MICROSOFT_CALENDAR_USER_UPN in the backend environment to the superuser's Microsoft 365 address, then restart the API.",
+    "Microsoft calendar is not connected yet. Click 'Connect Microsoft Calendar' to link your Microsoft 365 account.",
   GRAPH_PERMISSION_MISSING:
-    "Grant the Entra application the Calendars.Read application permission and grant admin consent.",
+    "Microsoft account permissions missing. Please reconnect and ensure Calendars.Read and Tasks permissions are granted.",
   CALENDAR_NOT_FOUND:
-    "The configured mailbox does not exist in this tenant, or the application is not provisioned in the tenant.",
+    "The connected mailbox or calendar was not found in your Microsoft 365 tenant.",
   GRAPH_UNAUTHORIZED:
-    "Microsoft rejected the application credentials. Verify MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET and MICROSOFT_TENANT_ID.",
-  GRAPH_UNAVAILABLE: "Microsoft Graph could not be reached. Try again in a moment.",
+    "Microsoft rejected the credentials. Verify application registration or reconnect your account.",
+  GRAPH_UNAVAILABLE:
+    "Microsoft Graph service could not be reached right now. Please try again shortly.",
 };
 
 /** Human-readable next step for a calendar error code. */
@@ -97,8 +127,98 @@ export function fetchCalendarEvents(query: CalendarQuery = {}): Promise<Calendar
   return apiJson<CalendarEventsResponse>(
     `/api/v1/microsoft/calendar/events${qs ? `?${qs}` : ""}`,
     { cache: "no-store" },
-    "Could not load the Microsoft calendar"
+    "Could not load the Microsoft calendar events"
   );
+}
+
+export function createCalendarEvent(payload: CreateEventPayload): Promise<CalendarEvent> {
+  return apiJson<CalendarEvent>(
+    "/api/v1/microsoft/calendar/events",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Could not create the calendar event"
+  );
+}
+
+export function deleteCalendarEvent(eventId: string): Promise<{ success: boolean; event_id: string }> {
+  return apiJson<{ success: boolean; event_id: string }>(
+    `/api/v1/microsoft/calendar/events/${encodeURIComponent(eventId)}`,
+    {
+      method: "DELETE",
+    },
+    "Could not delete the calendar event"
+  );
+}
+
+export function fetchCalendarTasks(): Promise<CalendarTasksResponse> {
+  return apiJson<CalendarTasksResponse>(
+    "/api/v1/microsoft/calendar/tasks",
+    { cache: "no-store" },
+    "Could not load Microsoft To-Do tasks"
+  );
+}
+
+export function createCalendarTask(payload: CreateTaskPayload): Promise<CalendarTask> {
+  return apiJson<CalendarTask>(
+    "/api/v1/microsoft/calendar/tasks",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Could not create task"
+  );
+}
+
+export function updateCalendarTask(
+  taskId: string,
+  payload: { is_completed?: boolean; status?: string; title?: string }
+): Promise<{ id: string; status?: string; is_completed?: boolean }> {
+  return apiJson<{ id: string; status?: string; is_completed?: boolean }>(
+    `/api/v1/microsoft/calendar/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    "Could not update task"
+  );
+}
+
+export function deleteCalendarTask(taskId: string): Promise<{ success: boolean; task_id: string }> {
+  return apiJson<{ success: boolean; task_id: string }>(
+    `/api/v1/microsoft/calendar/tasks/${encodeURIComponent(taskId)}`,
+    {
+      method: "DELETE",
+    },
+    "Could not delete task"
+  );
+}
+
+export function disconnectCalendar(): Promise<{ success: boolean }> {
+  return apiJson<{ success: boolean }>(
+    "/api/v1/microsoft/calendar/disconnect",
+    {
+      method: "POST",
+    },
+    "Could not disconnect calendar"
+  );
+}
+
+export function activateCalendar(): Promise<{ success: boolean }> {
+  return apiJson<{ success: boolean }>(
+    "/api/v1/microsoft/calendar/activate",
+    {
+      method: "POST",
+    },
+    "Could not activate calendar"
+  );
+}
+
+/** Get the OAuth connection URL for Microsoft 365 Calendar */
+export function getMicrosoftConnectUrl(returnTab = "calendar"): string {
+  const redirectTarget = `/dashboard/super-admin?tab=${encodeURIComponent(returnTab)}&connected=true`;
+  return `http://localhost:8000/api/auth/microsoft/calendar/connect?redirect=${encodeURIComponent(redirectTarget)}`;
 }
 
 /** True when a calendar failure means "not set up" rather than "try again". */

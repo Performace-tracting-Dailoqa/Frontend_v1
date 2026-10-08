@@ -626,13 +626,24 @@ export interface LearnerProgressItem {
   avg_grade: number;
 }
 
+export interface WorkflowProgressItem {
+  id: string;
+  name: string;
+  total: number;
+  completed: number;
+  percentage: number;
+  color?: string;
+}
+
 export interface ManagerProgressSummary {
+  total_workflows?: number;
   total_tasks: number;
   completed_tasks: number;
   pending_tasks: number;
   in_progress_tasks: number;
   under_review_tasks: number;
   overall_completion_rate: number;
+  workflow_distribution?: WorkflowProgressItem[];
   batch_distribution: BatchProgressItem[];
   status_distribution: StatusDistributionItem[];
   priority_distribution: PriorityDistributionItem[];

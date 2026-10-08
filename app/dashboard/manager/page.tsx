@@ -426,9 +426,9 @@ function ManagerDashboardContent() {
                     workflows={workflows}
                     selectedWorkflow={selectedWorkflow}
                     onSelectWorkflow={(wf) => setSelectedWorkflow(wf)}
-                    tasks={tasks}
-                    isLoadingTasks={isLoadingTasks}
-                    teamMembers={effectiveTeamMembers}
+                    tasks={allManagerTasks.length > 0 ? allManagerTasks : tasks}
+                    isLoadingTasks={isLoadingTasks || isContextLoading}
+                    teamMembers={teamMembers}
                     selectedTask={selectedTask}
                     onSelectTask={(t) => setSelectedTask(t)}
                     onCreateTask={async (data) => {

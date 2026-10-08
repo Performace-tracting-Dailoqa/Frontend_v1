@@ -82,6 +82,7 @@ export default function ProtectedRoute({
           saveProfileSession(me);
           handleUser({
             ...storedSession,
+            mustChangePassword: me.must_change_password,
             user: me,
             role: me.role,
             profile: me.profile || null,

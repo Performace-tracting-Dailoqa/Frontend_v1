@@ -14,6 +14,7 @@ import {
 
 interface EvaluationsTabProps {
   initialStudent?: TeacherStudent | null;
+  initialStudentId?: string | null;
 }
 
 interface JapaneseCategoryMetric {
@@ -86,7 +87,7 @@ const DEFAULT_METRICS: JapaneseCategoryMetric[] = [
   },
 ];
 
-export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) {
+export default function EvaluationsTab({ initialStudent, initialStudentId }: EvaluationsTabProps) {
   const [batches, setBatches] = useState<TeacherBatch[]>([]);
   const [students, setStudents] = useState<TeacherStudent[]>([]);
   const [selectedBatchId, setSelectedBatchId] = useState<string>("");
@@ -177,6 +178,18 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
           } else if (batchesRes.length > 0) {
             setSelectedBatchId(batchesRes[0].id);
           }
+        } else if (initialStudentId) {
+          const match = studentsRes.find((s) => s.id === initialStudentId);
+          if (match) {
+            setSelectedStudent(match);
+            if (match.batch_id) {
+              setSelectedBatchId(match.batch_id);
+            } else if (batchesRes.length > 0) {
+              setSelectedBatchId(batchesRes[0].id);
+            }
+          } else if (batchesRes.length > 0) {
+            setSelectedBatchId(batchesRes[0].id);
+          }
         } else if (batchesRes.length > 0) {
           setSelectedBatchId(batchesRes[0].id);
           const firstBatchStudents = studentsRes.filter((s) => s.batch_id === batchesRes[0].id);
@@ -188,7 +201,7 @@ export default function EvaluationsTab({ initialStudent }: EvaluationsTabProps) 
         }
       })
       .catch((err) => console.warn("Failed to load batches or students:", err));
-  }, [initialStudent]);
+  }, [initialStudent, initialStudentId]);
 
   // When selectedBatchId changes, pick the first student in that batch if current student is not in it
   const handleBatchSelect = (batchId: string) => {

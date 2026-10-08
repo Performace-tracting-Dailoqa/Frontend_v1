@@ -1,12 +1,14 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
 import CountUp from "@/components/animations/CountUp";
 import SpotlightCard from "@/components/animations/SpotlightCard";
 import Magnet from "@/components/animations/Magnet";
 import { shortDate } from "@/utils/date";
+import { fetchStudentEvaluations, StudentEvaluationItem } from "@/services/workflowService";
+import { getAuthToken } from "@/utils/auth";
 
 export interface GeneratedReport {
   id: string;
@@ -168,6 +170,102 @@ export default function StudentReportsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedReport, setSelectedReport] = useState<GeneratedReport | null>(null);
   const [downloadNotice, setDownloadNotice] = useState<string | null>(null);
+
+  // Load live evaluations and reports on mount
+  useEffect(() => {
+    const loadLiveReports = async () => {
+      try {
+        const token = getAuthToken();
+        const headers = {
+          Accept: "application/json",
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        };
+
+        const [evalsRes, jpRes] = await Promise.allSettled([
+          fetchStudentEvaluations(),
+          fetch("/api/v1/student/japanese-analytics", { headers, cache: "no-store" }).then((r) =>
+            r.ok ? r.json() : null
+          ),
+        ]);
+
+        const liveList: GeneratedReport[] = [];
+
+        // Map manager/general evaluations
+        if (evalsRes.status === "fulfilled" && evalsRes.value?.items) {
+          evalsRes.value.items.forEach((ev: StudentEvaluationItem) => {
+            const isJp = (ev.evaluation_type || "").toLowerCase().includes("japanese");
+            const pct =
+              ev.percentage ??
+              (ev.max_score && ev.total_score ? Math.round((ev.total_score / ev.max_score) * 100) : 85);
+            liveList.push({
+              id: `eval-${ev.id}`,
+              title: ev.task_title
+                ? `${ev.task_title} Assessment Dossier`
+                : `${ev.workflow_title || "Performance"} Milestone Report`,
+              report_type: isJp ? "japanese" : "manager",
+              category_label: isJp ? "Japanese Language Report" : "Manager Technical Report",
+              cycle_type: "Quarterly",
+              period: ev.evaluated_at
+                ? new Date(ev.evaluated_at).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+                : "Current Quarter",
+              generated_by: ev.evaluator_name || (isJp ? "Japanese Faculty" : "Reporting Manager"),
+              generator_role: isJp ? "Language Faculty Mentor" : "Technical Lead & Manager",
+              published_at: ev.evaluated_at ? ev.evaluated_at.split("T")[0] : new Date().toISOString().split("T")[0],
+              file_size: "1.9 MB",
+              file_format: "PDF Document",
+              score_percentage: pct,
+              grade_badge: pct >= 90 ? "Grade A+ (Exceeds Target)" : pct >= 80 ? "Grade A (Proficient)" : "Grade B (Developing)",
+              executive_summary: ev.remarks || "Comprehensive milestone evaluation performance audit.",
+              competency_highlights: (ev.metrics || []).map((m) => ({
+                label: m.name,
+                score: m.score ?? 80,
+                max: m.max_score || m.full_score || 100,
+              })),
+              key_achievements: ["Successfully completed assigned milestone assessment"],
+              recommendations: ["Continue tracking against curriculum targets"],
+            });
+          });
+        }
+
+        // Map Japanese evaluations history
+        if (jpRes.status === "fulfilled" && jpRes.value?.evaluations_history) {
+          jpRes.value.evaluations_history.forEach((jpEv: any) => {
+            liveList.push({
+              id: `jp-${jpEv.id}`,
+              title: `${jpEv.evaluation_title || "JLPT Milestone"} Official Evaluation`,
+              report_type: "japanese",
+              category_label: "Japanese Language Report",
+              cycle_type: "Quarterly",
+              period: jpEv.evaluation_date
+                ? new Date(jpEv.evaluation_date).toLocaleDateString("en-US", { month: "short", year: "numeric" })
+                : "Recent Milestone",
+              generated_by: "Japanese Language Sensei",
+              generator_role: "Japanese Language Faculty Lead",
+              published_at: jpEv.evaluation_date || new Date().toISOString().split("T")[0],
+              file_size: "2.1 MB",
+              file_format: "PDF Document",
+              score_percentage: jpEv.percentage || 85,
+              grade_badge: (jpEv.percentage || 85) >= 90 ? "Grade A+ (Distinction)" : "Grade A (Proficient)",
+              executive_summary: jpEv.feedback || "Evaluated by sensei on Japanese language retention.",
+              competency_highlights: [
+                { label: `JLPT ${jpEv.jlpt_level || "N5"} Proficiency`, score: jpEv.percentage || 85, max: 100 },
+              ],
+              key_achievements: [`Completed ${jpEv.evaluation_type || "daily"} assessment`],
+              recommendations: ["Maintain consistent flashcard and kanji practice"],
+            });
+          });
+        }
+
+        if (liveList.length > 0) {
+          setReports([...liveList, ...INITIAL_REPORTS]);
+        }
+      } catch (err) {
+        console.warn("Failed to load live reports:", err);
+      }
+    };
+
+    loadLiveReports();
+  }, []);
 
   // Filter reports
   const filteredReports = useMemo(() => {

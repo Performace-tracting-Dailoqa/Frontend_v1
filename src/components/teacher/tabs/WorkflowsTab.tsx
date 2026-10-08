@@ -267,15 +267,24 @@ export default function WorkflowsTab({
     setWorkflowError(null);
     try {
       const data = await fetchTeacherWorkflows(selectedBatchId === "all" ? undefined : selectedBatchId);
-      setWorkflows(data.items || []);
-      // If currently active workflow exists in new list, update it
+      const items = data.items || [];
+      setWorkflows(items);
+      // If currently active workflow exists in new list, update it; otherwise auto-select first workflow
       if (activeWorkflow) {
-        const found = (data.items || []).find((w) => w.id === activeWorkflow.id);
+        const found = items.find((w) => w.id === activeWorkflow.id);
         if (found) {
           setActiveWorkflow(found);
           const metrics = getStoredWorkflowMetrics(found.id, found.name);
           setActiveWorkflowMetrics(metrics);
+        } else if (items.length > 0) {
+          setActiveWorkflow(items[0]);
+          const metrics = getStoredWorkflowMetrics(items[0].id, items[0].name);
+          setActiveWorkflowMetrics(metrics);
         }
+      } else if (items.length > 0) {
+        setActiveWorkflow(items[0]);
+        const metrics = getStoredWorkflowMetrics(items[0].id, items[0].name);
+        setActiveWorkflowMetrics(metrics);
       }
     } catch (err: any) {
       setWorkflowError(err.message || "Failed to load workflows");

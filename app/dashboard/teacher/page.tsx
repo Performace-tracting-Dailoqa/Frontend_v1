@@ -110,7 +110,10 @@ function TeacherDashboardContent() {
               {activeTab === "progress" && <ProgressTab />}
               {activeTab === "feedback" && <FeedbackTab />}
               {activeTab === "evaluations" && (
-                <EvaluationsTab initialStudent={selectedStudentForEval} />
+                <EvaluationsTab
+                  initialStudent={selectedStudentForEval}
+                  initialStudentId={searchParams.get("student_id")}
+                />
               )}
               {activeTab === "reports" && <ReportsTab />}
               {activeTab === "history" && <HistoryTab />}

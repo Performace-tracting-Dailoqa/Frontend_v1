@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, Suspense, useCallback } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
 import DashboardLayout from "@/components/DashboardLayout";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import PeopleTab from "@/components/super-admin/tabs/PeopleTab";
@@ -26,7 +27,11 @@ import {
   OverdueEvaluator,
 } from "@/services/hrService";
 
-export default function HRDashboardPage() {
+function HRDashboardContent() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const tabParam = searchParams.get("tab");
+
   const [activeTab, setActiveTab] = useState<
     "employees" | "cycles" | "evaluations" | "rubrics" | "analytics" | "reports" | "notifications"
   >("employees");
@@ -74,19 +79,26 @@ export default function HRDashboardPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
+  // Sync activeTab with URL search params or hash
   useEffect(() => {
+    const validTabs = ["employees", "cycles", "evaluations", "rubrics", "analytics", "reports", "notifications"];
+    if (tabParam && validTabs.includes(tabParam)) {
+      setActiveTab(tabParam as typeof activeTab);
+      return;
+    }
     if (typeof window !== "undefined") {
       const hash = window.location.hash.replace("#", "");
-      if (
-        hash &&
-        ["employees", "cycles", "evaluations", "rubrics", "analytics", "reports", "notifications"].includes(hash)
-      ) {
+      if (hash && validTabs.includes(hash)) {
         setActiveTab(hash as typeof activeTab);
+        return;
       }
     }
-  }, []);
+    if (!tabParam) {
+      setActiveTab("employees");
+    }
+  }, [tabParam]);
 
-  const loadData = () => {
+  const loadData = useCallback(() => {
     setIsLoading(true);
     Promise.all([
       fetchHREvaluationSummary().catch(() => null),
@@ -107,11 +119,12 @@ export default function HRDashboardPage() {
         setOverdueEvaluators(overdueData);
       })
       .finally(() => setIsLoading(false));
-  };
+  }, []);
 
+  // Fetch data once on initial load; reuse state across tabs without spamming fetches
   useEffect(() => {
     loadData();
-  }, []);
+  }, [loadData]);
 
   // Handlers
   const handleCreateCycle = async (e: React.FormEvent) => {
@@ -1115,5 +1128,13 @@ export default function HRDashboardPage() {
         );
       }}
     </ProtectedRoute>
+  );
+}
+
+export default function HRDashboardPage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen flex items-center justify-center text-xs text-slate-500">Loading HR Operations...</div>}>
+      <HRDashboardContent />
+    </Suspense>
   );
 }

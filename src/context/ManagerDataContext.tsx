@@ -1,6 +1,6 @@
 "use client";
 
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from "react";
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from "react";
 import {
   ManagerTeam,
   TeamMember,
@@ -35,7 +35,7 @@ interface ManagerDataContextType {
 
 const ManagerDataContext = createContext<ManagerDataContextType | undefined>(undefined);
 
-// 1 Hour TTL in Milliseconds (3,600,000 ms)
+// Cache TTL: 1 Hour (3,600,000 ms) - Saves fetched data and displays instantly on subsequent page visits
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 function getManagerCacheKey(): string {
@@ -70,6 +70,7 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
   const [lastFetchedAt, setLastFetchedAt] = useState<number | null>(null);
+  const lastFetchedAtRef = useRef<number | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   // Load from Storage Cache (sessionStorage)
@@ -100,20 +101,12 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
     }
   }, []);
 
-  // Master Fetch Function (Fetch once an hour or force on manual refresh)
+  // Master Fetch Function: Check cache first, display immediately, only fetch if cache missing or explicitly forced
   const fetchData = useCallback(
     async (options?: { force?: boolean }) => {
       const isForce = options?.force === true;
 
-      // If forced, clear existing cache
-      if (isForce && typeof window !== "undefined") {
-        try {
-          const key = getManagerCacheKey();
-          sessionStorage.removeItem(key);
-        } catch {}
-      }
-
-      // 1. Check if we can use cached data (less than 1 hour old and non-empty)
+      // If not forced, check cache first and display immediately
       if (!isForce) {
         const cached = loadFromStorage();
         if (
@@ -128,16 +121,25 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
           setAllTasks(cached.allTasks || []);
           setProgressSummary(cached.progressSummary || null);
           setLastFetchedAt(cached.lastFetchedAt);
+          lastFetchedAtRef.current = cached.lastFetchedAt;
           setIsLoading(false);
           return;
         }
       }
 
-      // 2. Fetch fresh data from backend
+      // If forced, clear existing cache
+      if (isForce && typeof window !== "undefined") {
+        try {
+          const key = getManagerCacheKey();
+          sessionStorage.removeItem(key);
+        } catch {}
+      }
+
+      // Fetch fresh data from backend
       try {
         if (isForce) {
           setIsRefreshing(true);
-        } else if (!lastFetchedAt) {
+        } else if (!lastFetchedAtRef.current) {
           setIsLoading(true);
         }
         setError(null);
@@ -166,6 +168,7 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
         setAllTasks(newTasks);
         setProgressSummary(newProgress);
         setLastFetchedAt(timestamp);
+        lastFetchedAtRef.current = timestamp;
 
         // Update Storage Cache
         saveToStorage({
@@ -184,21 +187,12 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
         setIsRefreshing(false);
       }
     },
-    [lastFetchedAt, loadFromStorage, saveToStorage]
+    [loadFromStorage, saveToStorage]
   );
 
-  // Initial load: fetch or read from cache
+  // Initial load: check cache first and display without spamming
   useEffect(() => {
     fetchData({ force: false });
-  }, [fetchData]);
-
-  // Hourly Background Interval (Fetch once every 1 hour when idle)
-  useEffect(() => {
-    const hourlyTimer = setInterval(() => {
-      fetchData({ force: false });
-    }, CACHE_TTL_MS);
-
-    return () => clearInterval(hourlyTimer);
   }, [fetchData]);
 
   // Optimistic State Mutators

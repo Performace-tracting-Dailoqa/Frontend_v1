@@ -24,6 +24,7 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
         title: "Student Operations",
         items: [
           { label: "My Performance", href: "/student/dashboard", icon: "trending_up" },
+          { label: "Attendance", href: "/student/attendance", icon: "calendar_today" },
           { label: "Learning Progress", href: "/student/learning-progress", icon: "school" },
           { label: "Feedback", href: "/student/feedback", icon: "forum" },
           { label: "Reports", href: "/student/reports", icon: "summarize" },

@@ -21,6 +21,30 @@ interface TeamTabProps {
   onRefreshData?: () => Promise<void>;
 }
 
+/**
+ * Page numbers to render, with `null` standing in for an ellipsis.
+ */
+function paginationItems(current: number, total: number, span = 1): Array<number | null> {
+  if (total <= 0) return [];
+  if (total === 1) return [1];
+
+  const wanted = new Set<number>([1, total, current]);
+  for (let offset = 1; offset <= span; offset += 1) {
+    if (current - offset >= 1) wanted.add(current - offset);
+    if (current + offset <= total) wanted.add(current + offset);
+  }
+
+  const pages = [...wanted].sort((a, b) => a - b);
+  const items: Array<number | null> = [];
+  let previous = 0;
+  for (const page of pages) {
+    if (previous && page - previous > 1) items.push(null);
+    items.push(page);
+    previous = page;
+  }
+  return items;
+}
+
 export default function TeamTab({
   teams,
   selectedTeam,
@@ -34,6 +58,8 @@ export default function TeamTab({
 }: TeamTabProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [departmentFilter, setDepartmentFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 10;
 
   // Team Details / Members Popup State
   const [teamDetailModal, setTeamDetailModal] = useState<ManagerTeam | null>(null);
@@ -205,6 +231,23 @@ export default function TeamTab({
     const matchesDept = departmentFilter === "all" || m.department === departmentFilter;
     return matchesSearch && matchesDept;
   });
+
+  // Reset page to 1 when search or department filter changes
+  React.useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, departmentFilter]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredMembers.length / PAGE_SIZE));
+  const safeCurrentPage = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedMembers = React.useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * PAGE_SIZE;
+    return filteredMembers.slice(startIndex, startIndex + PAGE_SIZE);
+  }, [filteredMembers, safeCurrentPage]);
+
+  const firstRow = filteredMembers.length === 0 ? 0 : (safeCurrentPage - 1) * PAGE_SIZE + 1;
+  const lastRow = Math.min(safeCurrentPage * PAGE_SIZE, filteredMembers.length);
+  const pageItems = paginationItems(safeCurrentPage, totalPages);
 
   // Filter available students for modal
   const filteredAvailableStudents = availableStudents.filter((s) => {
@@ -487,7 +530,7 @@ export default function TeamTab({
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/20">
-                {filteredMembers.map((member) => {
+                {paginatedMembers.map((member) => {
                   const teamName =
                     member.batch_name ||
                     teams.find((t) => t.id === member.batch_id)?.name ||
@@ -567,8 +610,70 @@ export default function TeamTab({
               </tbody>
             </table>
           </div>
-          <div className="p-3 bg-surface-container/30 border-t border-outline-variant/30 text-xs text-outline text-right font-medium">
-            Showing {filteredMembers.length} of {allMembers.length} total members
+          <div className="px-5 py-3.5 bg-surface-container/30 border-t border-outline-variant/30 flex flex-wrap items-center justify-between gap-3 text-xs">
+            <div className="font-semibold text-slate-500">
+              Showing <span className="text-slate-800 font-bold">{firstRow}–{lastRow}</span> of{" "}
+              <span className="text-slate-800 font-bold">{filteredMembers.length}</span> members
+              {filteredMembers.length !== allMembers.length && (
+                <span className="text-slate-400 font-normal ml-1">
+                  (filtered from {allMembers.length} total)
+                </span>
+              )}
+            </div>
+
+            {totalPages > 1 && (
+              <nav aria-label="Members pagination" className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                  disabled={safeCurrentPage === 1}
+                  aria-label="Previous page"
+                  className="h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs"
+                >
+                  <span className="material-symbols-outlined text-sm">chevron_left</span>
+                  <span>Previous</span>
+                </button>
+
+                <div className="flex items-center gap-1">
+                  {pageItems.map((item, index) =>
+                    item === null ? (
+                      <span
+                        key={`gap-${index}`}
+                        aria-hidden="true"
+                        className="px-1 text-xs font-bold text-slate-400"
+                      >
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={item}
+                        type="button"
+                        onClick={() => setCurrentPage(item)}
+                        aria-current={item === safeCurrentPage ? "page" : undefined}
+                        className={`h-8 min-w-8 px-2.5 rounded-lg text-xs font-bold transition-colors cursor-pointer ${
+                          item === safeCurrentPage
+                            ? "bg-primary text-white shadow-xs"
+                            : "bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40"
+                        }`}
+                      >
+                        {item}
+                      </button>
+                    )
+                  )}
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                  disabled={safeCurrentPage === totalPages}
+                  aria-label="Next page"
+                  className="h-8 px-2.5 flex items-center justify-center gap-1 rounded-lg bg-surface-container hover:bg-surface-container-high text-on-surface border border-outline-variant/40 transition-colors cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed font-medium text-xs"
+                >
+                  <span>Next</span>
+                  <span className="material-symbols-outlined text-sm">chevron_right</span>
+                </button>
+              </nav>
+            )}
           </div>
         </div>
       )}

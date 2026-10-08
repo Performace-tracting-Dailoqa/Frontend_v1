@@ -10,7 +10,8 @@
  * 4. Invalidation: Mutations (POST, PUT, DELETE) automatically clear related cached endpoints.
  */
 
-const ONE_HOUR_MS = 60 * 60 * 1000;
+// Cache TTL: 1 Hour (3,600,000 ms) - Saves fetched data and displays instantly on subsequent page visits
+const DEFAULT_CACHE_TTL_MS = 60 * 60 * 1000;
 const CACHE_STORAGE_PREFIX = "dailoqa_cache_v1:";
 
 interface CacheEntry<T> {
@@ -51,9 +52,9 @@ function removeSessionStorageItem(key: string): void {
 }
 
 /**
- * Retrieve cached data for a given URL/key if it exists and has not expired (within 1 hour).
+ * Retrieve cached data for a given URL/key if it exists and has not expired (within debounce TTL).
  */
-export function getCachedData<T>(key: string, customTtlMs: number = ONE_HOUR_MS): T | null {
+export function getCachedData<T>(key: string, customTtlMs: number = DEFAULT_CACHE_TTL_MS): T | null {
   const now = Date.now();
 
   // 1. Check memory cache first
@@ -86,9 +87,9 @@ export function getCachedData<T>(key: string, customTtlMs: number = ONE_HOUR_MS)
 }
 
 /**
- * Store data in the cache with timestamp and TTL (default 1 hour).
+ * Store data in the cache with timestamp and TTL (default debounce TTL).
  */
-export function setCachedData<T>(key: string, data: T, ttlMs: number = ONE_HOUR_MS): void {
+export function setCachedData<T>(key: string, data: T, ttlMs: number = DEFAULT_CACHE_TTL_MS): void {
   const entry: CacheEntry<T> = {
     data,
     timestamp: Date.now(),

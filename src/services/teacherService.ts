@@ -1,6 +1,6 @@
 "use client";
 
-import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "./apiClient";
 
 export interface TeacherBatch {
   id: string;
@@ -56,31 +56,13 @@ export interface GeneralEvaluation {
   metrics?: GeneralMetric[];
 }
 
-function getHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
 
 // ---------------------------------------------------------------------------
 // Teacher Batches (/api/v1/teacher/batches)
 // ---------------------------------------------------------------------------
 
 export async function fetchTeacherBatches(): Promise<TeacherBatch[]> {
-  const res = await fetch("/api/v1/teacher/batches", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch teacher batches: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherBatch[]>("/api/v1/teacher/batches", {}, "Failed to fetch teacher batches");
 }
 
 export async function createTeacherBatch(data: {
@@ -90,16 +72,14 @@ export async function createTeacherBatch(data: {
   start_date?: string;
   end_date?: string;
 }): Promise<TeacherBatch> {
-  const res = await fetch("/api/v1/teacher/batches", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.detail?.message || errorData?.detail || `Failed to create batch: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherBatch>(
+    "/api/v1/teacher/batches",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    "Failed to create batch"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -107,103 +87,59 @@ export async function createTeacherBatch(data: {
 // ---------------------------------------------------------------------------
 
 export async function fetchTeacherStudents(): Promise<TeacherStudent[]> {
-  const res = await fetch("/api/v1/teacher/students", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch assigned students: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherStudent[]>("/api/v1/teacher/students", {}, "Failed to fetch assigned students");
 }
 
 export async function fetchUnassignedStudents(department?: string): Promise<TeacherStudent[]> {
   const url = department
     ? `/api/v1/teacher/students/unassigned?department=${encodeURIComponent(department)}`
     : "/api/v1/teacher/students/unassigned";
-  const res = await fetch(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch unassigned students: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherStudent[]>(url, {}, "Failed to fetch unassigned students");
 }
 
 export async function updateStudentBatch(
   studentId: string,
   batchId: string | null
 ): Promise<TeacherStudent> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/batch`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    body: JSON.stringify({ batch_id: batchId }),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(
-      errorData?.detail?.message ||
-        errorData?.detail ||
-        `Failed to update student batch: ${res.statusText}`
-    );
-  }
-  return res.json();
+  return apiJson<TeacherStudent>(
+    `/api/v1/teacher/students/${studentId}/batch`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ batch_id: batchId }),
+    },
+    "Failed to update student batch"
+  );
 }
 
 export async function removeStudentFromBatch(
   batchId: string,
   studentId: string
 ): Promise<TeacherStudent> {
-  const res = await fetch(`/api/v1/teacher/batches/${batchId}/students/${studentId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(
-      errorData?.detail?.message ||
-        errorData?.detail ||
-        `Failed to remove student from batch: ${res.statusText}`
-    );
-  }
-  return res.json();
+  return apiJson<TeacherStudent>(
+    `/api/v1/teacher/batches/${batchId}/students/${studentId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to remove student from batch"
+  );
 }
 
 export async function assignStudentsToBatch(
   batchId: string,
   studentIds: string[]
 ): Promise<{ success: boolean; message: string }> {
-  const res = await fetch(`/api/v1/teacher/batches/${batchId}/students`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({ student_ids: studentIds }),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(
-      errorData?.detail?.message ||
-        errorData?.detail ||
-        `Failed to assign students to batch: ${res.statusText}`
-    );
-  }
-  return res.json();
+  return apiJson<{ success: boolean; message: string }>(
+    `/api/v1/teacher/batches/${batchId}/students`,
+    {
+      method: "POST",
+      body: JSON.stringify({ student_ids: studentIds }),
+    },
+    "Failed to assign students to batch"
+  );
 }
 
 export async function fetchStudentProfile(studentId: string): Promise<any> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}`, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(
-      errorData?.detail?.message ||
-        errorData?.detail ||
-        `Failed to fetch student profile: ${res.statusText}`
-    );
-  }
-  return res.json();
+  return apiJson<any>(`/api/v1/teacher/students/${studentId}`, {}, "Failed to fetch student profile");
 }
 
 
@@ -212,15 +148,12 @@ export async function fetchStudentProfile(studentId: string): Promise<any> {
 // ---------------------------------------------------------------------------
 
 export async function fetchStudentGeneralEvaluation(studentId: string): Promise<GeneralEvaluation | null> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations`, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (res.status === 404) return null;
-  if (!res.ok) {
-    throw new Error(`Failed to fetch evaluation: ${res.statusText}`);
+  try {
+    return await apiJson<GeneralEvaluation>(`/api/v1/teacher/students/${studentId}/evaluations`, {}, "Failed to fetch evaluation");
+  } catch (err: any) {
+    if (err?.status === 404) return null;
+    throw err;
   }
-  return res.json();
 }
 
 export async function createStudentGeneralEvaluation(
@@ -233,16 +166,14 @@ export async function createStudentGeneralEvaluation(
     remarks?: string;
   }
 ): Promise<GeneralEvaluation> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.detail?.message || errorData?.detail || `Failed to create evaluation: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<GeneralEvaluation>(
+    `/api/v1/teacher/students/${studentId}/evaluations`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    "Failed to create evaluation"
+  );
 }
 
 export async function updateStudentGeneralEvaluation(
@@ -256,29 +187,27 @@ export async function updateStudentGeneralEvaluation(
     remarks?: string;
   }
 ): Promise<GeneralEvaluation> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.detail?.message || errorData?.detail || `Failed to update evaluation: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<GeneralEvaluation>(
+    `/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    },
+    "Failed to update evaluation"
+  );
 }
 
 export async function deleteStudentGeneralEvaluation(
   studentId: string,
   evaluationId: string
 ): Promise<void> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to delete evaluation: ${res.statusText}`);
-  }
+  return apiJson<void>(
+    `/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete evaluation"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -297,16 +226,14 @@ export async function addGeneralMetric(
     remarks?: string;
   }
 ): Promise<GeneralMetric> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}/metrics`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(metric),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(errorData?.detail?.message || errorData?.detail || `Failed to create metric: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<GeneralMetric>(
+    `/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}/metrics`,
+    {
+      method: "POST",
+      body: JSON.stringify(metric),
+    },
+    "Failed to create metric"
+  );
 }
 
 export async function deleteGeneralMetric(
@@ -314,13 +241,13 @@ export async function deleteGeneralMetric(
   evaluationId: string,
   metricId: string
 ): Promise<void> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}/metrics/${metricId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to delete metric: ${res.statusText}`);
-  }
+  return apiJson<void>(
+    `/api/v1/teacher/students/${studentId}/evaluations/${evaluationId}/metrics/${metricId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete metric"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -450,36 +377,15 @@ export interface StudentJapaneseAnalyticsResponse {
 }
 
 export async function fetchTeacherDashboardSummary(): Promise<TeacherDashboardSummaryResponse> {
-  const res = await fetch("/api/v1/teacher/dashboard-summary", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch dashboard summary: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherDashboardSummaryResponse>("/api/v1/teacher/dashboard-summary", {}, "Failed to fetch dashboard summary");
 }
 
 export async function fetchBatchJapaneseDetails(batchId: string): Promise<BatchJapaneseDetailsResponse> {
-  const res = await fetch(`/api/v1/teacher/batches/${batchId}/details`, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch batch details: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<BatchJapaneseDetailsResponse>(`/api/v1/teacher/batches/${batchId}/details`, {}, "Failed to fetch batch details");
 }
 
 export async function fetchStudentJapaneseAnalytics(studentId: string): Promise<StudentJapaneseAnalyticsResponse> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/japanese-analytics`, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch student Japanese analytics: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<StudentJapaneseAnalyticsResponse>(`/api/v1/teacher/students/${studentId}/japanese-analytics`, {}, "Failed to fetch student Japanese analytics");
 }
 
 export interface TeacherFeedbackItem {
@@ -516,27 +422,18 @@ export async function fetchTeacherFeedbackFeed(batchId?: string, studentId?: str
 
   const qs = params.toString();
   const url = `/api/v1/teacher/feedbacks${qs ? `?${qs}` : ""}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch feedback feed: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherFeedbackItem[]>(url, {}, "Failed to fetch feedback feed");
 }
 
 export async function postTeacherFeedback(payload: PostFeedbackPayload): Promise<any> {
-  const res = await fetch("/api/v1/teacher/feedbacks", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || "Failed to post feedback");
-  }
-  return res.json();
+  return apiJson<any>(
+    "/api/v1/teacher/feedbacks",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to post feedback"
+  );
 }
 
 export interface JapaneseMetricInput {
@@ -569,20 +466,14 @@ export async function createStudentJapaneseEvaluation(
   studentId: string,
   payload: CreateJapaneseEvaluationPayload
 ): Promise<any> {
-  const res = await fetch(`/api/v1/teacher/students/${studentId}/japanese-evaluations`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const errorData = await res.json().catch(() => null);
-    throw new Error(
-      errorData?.detail?.message ||
-        errorData?.detail ||
-        `Failed to save Japanese evaluation: ${res.statusText}`
-    );
-  }
-  return res.json();
+  return apiJson<any>(
+    `/api/v1/teacher/students/${studentId}/japanese-evaluations`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to save Japanese evaluation"
+  );
 }
 
 export interface TeacherEvaluationHistoryItem {
@@ -627,14 +518,7 @@ export async function fetchTeacherEvaluationHistory(
 
   const qs = params.toString();
   const url = `/api/v1/teacher/evaluations/history${qs ? `?${qs}` : ""}`;
-  const res = await fetch(url, {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch evaluation history: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherEvaluationHistoryItem[]>(url, {}, "Failed to fetch evaluation history");
 }
 
 // ---------------------------------------------------------------------------
@@ -696,16 +580,11 @@ export async function fetchTeacherWorkflows(
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (batchId && batchId !== "all") params.append("batch_id", batchId);
 
-  const res = await fetch(`/api/v1/teacher/workflows?${params.toString()}`, {
-    method: "GET",
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch teacher workflows: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<PaginatedTeacherWorkflows>(
+    `/api/v1/teacher/workflows?${params.toString()}`,
+    {},
+    "Failed to fetch teacher workflows"
+  );
 }
 
 export async function createTeacherWorkflow(data: {
@@ -715,27 +594,24 @@ export async function createTeacherWorkflow(data: {
   start_date?: string;
   end_date?: string;
 }): Promise<TeacherWorkflow> {
-  const res = await fetch(`/api/v1/teacher/workflows`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create workflow: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherWorkflow>(
+    "/api/v1/teacher/workflows",
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    "Failed to create workflow"
+  );
 }
 
 export async function deleteTeacherWorkflow(workflowId: string): Promise<void> {
-  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete workflow: ${res.statusText}`);
-  }
+  return apiJson<void>(
+    `/api/v1/teacher/workflows/${workflowId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete workflow"
+  );
 }
 
 export async function fetchTeacherWorkflowTasks(
@@ -744,16 +620,11 @@ export async function fetchTeacherWorkflowTasks(
   pageSize = 100
 ): Promise<PaginatedTeacherTasks> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks?${params.toString()}`, {
-    method: "GET",
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch tasks: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<PaginatedTeacherTasks>(
+    `/api/v1/teacher/workflows/${workflowId}/tasks?${params.toString()}`,
+    {},
+    "Failed to fetch tasks"
+  );
 }
 
 export async function createTeacherWorkflowTask(
@@ -766,16 +637,14 @@ export async function createTeacherWorkflowTask(
     priority?: string;
   }
 ): Promise<TeacherWorkflowTask> {
-  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({ ...data, workflow_id: workflowId }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create task: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<TeacherWorkflowTask>(
+    `/api/v1/teacher/workflows/${workflowId}/tasks`,
+    {
+      method: "POST",
+      body: JSON.stringify({ ...data, workflow_id: workflowId }),
+    },
+    "Failed to create task"
+  );
 }
 
 export async function bulkCreateTeacherWorkflowTasks(
@@ -788,27 +657,24 @@ export async function bulkCreateTeacherWorkflowTasks(
     student_ids: string[];
   }
 ): Promise<{ success: boolean; assigned_count: number; tasks: TeacherWorkflowTask[] }> {
-  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/bulk-tasks`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(data),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to bulk assign tasks: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<{ success: boolean; assigned_count: number; tasks: TeacherWorkflowTask[] }>(
+    `/api/v1/teacher/workflows/${workflowId}/bulk-tasks`,
+    {
+      method: "POST",
+      body: JSON.stringify(data),
+    },
+    "Failed to bulk assign tasks"
+  );
 }
 
 export async function deleteTeacherWorkflowTask(workflowId: string, taskId: string): Promise<void> {
-  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks/${taskId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete task: ${res.statusText}`);
-  }
+  return apiJson<void>(
+    `/api/v1/teacher/workflows/${workflowId}/tasks/${taskId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete task"
+  );
 }
 
 

@@ -408,9 +408,10 @@ function ManagerDashboardContent() {
                     isLoadingTasks={isLoadingTasks}
                     teamMembers={teamMembers}
                     onCreateTask={async (data) => {
-                      if (!selectedWorkflow) return;
-                      await createWorkflowTask(selectedWorkflow.id, data);
-                      await Promise.all([loadTasks(selectedWorkflow.id), refreshData({ force: true })]);
+                      const targetWfId = data.workflow_id || selectedWorkflow?.id;
+                      if (!targetWfId) return;
+                      await createWorkflowTask(targetWfId, data);
+                      await Promise.all([loadTasks(targetWfId), refreshData({ force: true })]);
                     }}
                     onDeleteTask={async (taskId) => {
                       await handleDeleteTask(taskId);

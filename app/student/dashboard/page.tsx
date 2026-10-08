@@ -6,6 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { LineChart } from "@mui/x-charts/LineChart";
 import { BarChart } from "@mui/x-charts/BarChart";
 import { getAuthToken, fetchMe } from "@/utils/auth";
+import { apiJson } from "@/services/apiClient";
 import {
   fetchStudentTasks,
   updateStudentTaskStatus,
@@ -184,23 +185,21 @@ export default function StudentDashboardPage() {
         })
         .catch(() => {});
 
-      // 2. Fetch student profile overview (Batch, Manager, Teacher)
-      fetch("/api/v1/student/profile/overview", { headers })
-        .then((res) => (res.ok ? res.json() : null))
+      // 2. Fetch student profile overview (Batch, Manager, Teacher) with cache
+      apiJson<any>("/api/v1/student/profile/overview")
         .then((data) => {
           if (data) setCohortContext(data);
         })
         .catch(() => {});
 
-      // 3. Fetch Japanese analytics
-      fetch("/api/v1/student/japanese-analytics", { headers })
-        .then((res) => (res.ok ? res.json() : null))
+      // 3. Fetch Japanese analytics with cache
+      apiJson<any>("/api/v1/student/japanese-analytics")
         .then((data) => {
           if (data) setJapaneseData(data);
         })
         .catch(() => {});
 
-      // 4. Fetch workflow tasks
+      // 4. Fetch workflow tasks with cache
       const taskRes = await fetchStudentTasks();
       if (taskRes && taskRes.items) {
         setRealTasks(taskRes.items);

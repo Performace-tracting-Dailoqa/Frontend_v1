@@ -5,7 +5,7 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import CountUp from "@/components/animations/CountUp";
 import BorderBeam from "@/components/animations/BorderBeam";
-import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "@/services/apiClient";
 
 interface AttendanceRecord {
   id: string;
@@ -34,17 +34,7 @@ export default function StudentAttendancePage() {
   const [trackFilter, setTrackFilter] = useState<string>("All");
 
   useEffect(() => {
-    const token = getAuthToken();
-    fetch("/api/v1/student/attendance", {
-      headers: {
-        Accept: "application/json",
-        ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      },
-    })
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch attendance");
-        return res.json();
-      })
+    apiJson<AttendanceSummaryResponse>("/api/v1/student/attendance")
       .then((resData) => setData(resData))
       .catch((err) => console.warn("Attendance fetch error:", err))
       .finally(() => setIsLoading(false));

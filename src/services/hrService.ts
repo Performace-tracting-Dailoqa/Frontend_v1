@@ -1,6 +1,6 @@
 "use client";
 
-import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "./apiClient";
 
 export interface HREvaluationSummary {
   total_evaluations: number;
@@ -113,38 +113,12 @@ export interface AttendanceRecord {
   remarks?: string;
 }
 
-function getHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
-
 export async function fetchHREvaluationSummary(): Promise<HREvaluationSummary> {
-  const res = await fetch("/api/v1/hr/evaluations/summary", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch HR evaluation summary: ${res.statusText}`);
-  }
-  return res.json();
+  return apiJson<HREvaluationSummary>("/api/v1/hr/evaluations/summary", {}, "Failed to fetch HR evaluation summary");
 }
 
 export async function fetchHRBatches(): Promise<HRBatch[]> {
-  const res = await fetch("/api/v1/batches", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error(`Failed to fetch batches: ${res.statusText}`);
-  }
-  const data = await res.json();
+  const data = await apiJson<any>("/api/v1/batches", {}, "Failed to fetch batches");
   return Array.isArray(data) ? data : data.items || [];
 }
 
@@ -153,40 +127,29 @@ export async function fetchHRBatches(): Promise<HRBatch[]> {
 // ---------------------------------------------------------------------------
 
 export async function fetchHRCycles(): Promise<PerformanceCycle[]> {
-  const res = await fetch("/api/v1/hr/cycles", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch performance cycles");
-  }
-  return res.json();
+  return apiJson<PerformanceCycle[]>("/api/v1/hr/cycles", {}, "Failed to fetch performance cycles");
 }
 
 export async function createHRCycle(payload: Partial<PerformanceCycle>): Promise<PerformanceCycle> {
-  const res = await fetch("/api/v1/hr/cycles", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to create performance cycle");
-  }
-  return res.json();
+  return apiJson<PerformanceCycle>(
+    "/api/v1/hr/cycles",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to create performance cycle"
+  );
 }
 
 export async function updateHRCycle(cycleId: string, payload: Partial<PerformanceCycle>): Promise<PerformanceCycle> {
-  const res = await fetch(`/api/v1/hr/cycles/${cycleId}`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to update performance cycle");
-  }
-  return res.json();
+  return apiJson<PerformanceCycle>(
+    `/api/v1/hr/cycles/${cycleId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update performance cycle"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -194,30 +157,21 @@ export async function updateHRCycle(cycleId: string, payload: Partial<Performanc
 // ---------------------------------------------------------------------------
 
 export async function fetchLockedEvaluations(): Promise<LockedEvaluation[]> {
-  const res = await fetch("/api/v1/hr/evaluations/locked", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch locked evaluations");
-  }
-  return res.json();
+  return apiJson<LockedEvaluation[]>("/api/v1/hr/evaluations/locked", {}, "Failed to fetch locked evaluations");
 }
 
 export async function reopenEvaluation(
   evaluationId: string,
   payload: { evaluation_type: "workflow" | "general"; reason: string; grace_period_hours?: number }
 ): Promise<any> {
-  const res = await fetch(`/api/v1/hr/evaluations/${evaluationId}/reopen`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to reopen evaluation");
-  }
-  return res.json();
+  return apiJson<any>(
+    `/api/v1/hr/evaluations/${evaluationId}/reopen`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to reopen evaluation"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -225,14 +179,7 @@ export async function reopenEvaluation(
 // ---------------------------------------------------------------------------
 
 export async function fetchRubricTemplates(): Promise<RubricTemplate[]> {
-  const res = await fetch("/api/v1/hr/rubrics", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch rubrics");
-  }
-  return res.json();
+  return apiJson<RubricTemplate[]>("/api/v1/hr/rubrics", {}, "Failed to fetch rubrics");
 }
 
 export async function createRubricTemplate(payload: {
@@ -241,16 +188,14 @@ export async function createRubricTemplate(payload: {
   rating_scale?: string;
   metrics: { name: string; weightage: number; description?: string }[];
 }): Promise<RubricTemplate> {
-  const res = await fetch("/api/v1/hr/rubrics", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err.detail || "Failed to create rubric template");
-  }
-  return res.json();
+  return apiJson<RubricTemplate>(
+    "/api/v1/hr/rubrics",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to create rubric template"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -258,37 +203,22 @@ export async function createRubricTemplate(payload: {
 // ---------------------------------------------------------------------------
 
 export async function fetchHRAnalyticsDistribution(): Promise<HRAnalyticsDistribution> {
-  const res = await fetch("/api/v1/hr/analytics/distribution", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch analytics distribution");
-  }
-  return res.json();
+  return apiJson<HRAnalyticsDistribution>("/api/v1/hr/analytics/distribution", {}, "Failed to fetch analytics distribution");
 }
 
 export async function fetchOverdueEvaluators(): Promise<OverdueEvaluator[]> {
-  const res = await fetch("/api/v1/hr/evaluators/overdue", {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch overdue evaluators");
-  }
-  return res.json();
+  return apiJson<OverdueEvaluator[]>("/api/v1/hr/evaluators/overdue", {}, "Failed to fetch overdue evaluators");
 }
 
 export async function nudgeEvaluator(receiver_user_id: string, message?: string): Promise<any> {
-  const res = await fetch("/api/v1/hr/evaluators/nudge", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({ receiver_user_id, message }),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to nudge evaluator");
-  }
-  return res.json();
+  return apiJson<any>(
+    "/api/v1/hr/evaluators/nudge",
+    {
+      method: "POST",
+      body: JSON.stringify({ receiver_user_id, message }),
+    },
+    "Failed to nudge evaluator"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -300,15 +230,14 @@ export async function recordBulkAttendance(payload: {
   track: string;
   records: { student_id: string; status: string; remarks?: string }[];
 }): Promise<any> {
-  const res = await fetch("/api/v1/hr/attendance", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to record attendance");
-  }
-  return res.json();
+  return apiJson<any>(
+    "/api/v1/hr/attendance",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to record attendance"
+  );
 }
 
 export async function fetchSessionAttendance(
@@ -316,17 +245,7 @@ export async function fetchSessionAttendance(
   track: string = "Japanese",
   batchId?: string
 ): Promise<AttendanceRecord[]> {
-  const url = new URL("/api/v1/hr/attendance", window.location.origin);
-  url.searchParams.set("session_date", sessionDate);
-  url.searchParams.set("track", track);
-  if (batchId) url.searchParams.set("batch_id", batchId);
-
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    throw new Error("Failed to fetch session attendance");
-  }
-  return res.json();
+  const params = new URLSearchParams({ session_date: sessionDate, track });
+  if (batchId) params.append("batch_id", batchId);
+  return apiJson<AttendanceRecord[]>(`/api/v1/hr/attendance?${params.toString()}`, {}, "Failed to fetch session attendance");
 }

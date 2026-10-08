@@ -12,7 +12,7 @@
 
 // Cache TTL: 1 Hour (3,600,000 ms) - Saves fetched data and displays instantly on subsequent page visits
 const DEFAULT_CACHE_TTL_MS = 60 * 60 * 1000;
-const CACHE_STORAGE_PREFIX = "dailoqa_cache_v1:";
+const CACHE_STORAGE_PREFIX = "dailoqa_cache_v2:";
 
 interface CacheEntry<T> {
   data: T;

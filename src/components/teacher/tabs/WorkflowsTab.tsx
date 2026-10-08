@@ -334,7 +334,11 @@ export default function WorkflowsTab({
       .finally(() => setIsLoadingTasks(false));
 
     // Load batch students for task assignment & student metrics view
-    if (activeWorkflow.batch_id) {
+    const isUuid = Boolean(
+      activeWorkflow.batch_id &&
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(activeWorkflow.batch_id)
+    );
+    if (isUuid && activeWorkflow.batch_id) {
       fetchBatchJapaneseDetails(activeWorkflow.batch_id)
         .then((res) => {
           const students = res.students || [];
@@ -348,17 +352,6 @@ export default function WorkflowsTab({
       loadBatchEvaluations(activeWorkflow.batch_id);
     }
   }, [activeWorkflow]);
-
-  // Also refresh evaluations on window focus (in case teacher evaluated student and navigated back)
-  useEffect(() => {
-    const onFocus = () => {
-      if (activeWorkflow?.batch_id) {
-        loadBatchEvaluations(activeWorkflow.batch_id);
-      }
-    };
-    window.addEventListener("focus", onFocus);
-    return () => window.removeEventListener("focus", onFocus);
-  }, [activeWorkflow?.batch_id]);
 
   // Selected metrics for the active workflow
   const selectedActiveMetrics = useMemo(() => {

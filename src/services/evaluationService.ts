@@ -1,6 +1,6 @@
 "use client";
 
-import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "./apiClient";
 
 export interface WorkflowMetric {
   id: string;
@@ -45,35 +45,21 @@ export interface WorkflowEvaluation {
   updated_at: string;
 }
 
-function getHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
-
 // ---------------------------------------------------------------------------
 // Manager Evaluations (/api/v1/manager/workflows/{workflow_id}/tasks/{task_id}/evaluations)
 // ---------------------------------------------------------------------------
 
 export async function fetchTaskEvaluation(workflowId: string, taskId: string): Promise<WorkflowEvaluation | null> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations`, {
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (res.status === 404) {
-    return null;
+  try {
+    return await apiJson<WorkflowEvaluation>(
+      `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations`,
+      {},
+      "Failed to fetch evaluation"
+    );
+  } catch (err: any) {
+    if (err?.status === 404) return null;
+    throw err;
   }
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch evaluation (${res.status})`);
-  }
-  return await res.json();
 }
 
 export async function createEvaluation(
@@ -81,16 +67,14 @@ export async function createEvaluation(
   taskId: string,
   payload: { student_id: string; max_score?: number; status?: string; remarks?: string }
 ): Promise<WorkflowEvaluation> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify({ max_score: 100.0, status: "draft", ...payload }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create evaluation (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowEvaluation>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations`,
+    {
+      method: "POST",
+      body: JSON.stringify({ max_score: 100.0, status: "draft", ...payload }),
+    },
+    "Failed to create evaluation"
+  );
 }
 
 export async function updateEvaluation(
@@ -99,27 +83,24 @@ export async function updateEvaluation(
   evaluationId: string,
   payload: Partial<{ max_score: number; total_score: number; percentage: number; status: string; remarks: string }>
 ): Promise<WorkflowEvaluation> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to update evaluation (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowEvaluation>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update evaluation"
+  );
 }
 
 export async function deleteEvaluation(workflowId: string, taskId: string, evaluationId: string): Promise<void> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete evaluation (${res.status})`);
-  }
+  return apiJson<void>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete evaluation"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -132,16 +113,14 @@ export async function createEvaluationMetric(
   evaluationId: string,
   payload: { name: string; full_score: number; weightage: number; description?: string }
 ): Promise<WorkflowMetric> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to add metric (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowMetric>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to add metric"
+  );
 }
 
 export async function updateEvaluationMetric(
@@ -151,16 +130,14 @@ export async function updateEvaluationMetric(
   metricId: string,
   payload: Partial<{ name: string; full_score: number; weightage: number; score: number; remarks: string; description: string }>
 ): Promise<WorkflowMetric> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics/${metricId}`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to update metric (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowMetric>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics/${metricId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update metric"
+  );
 }
 
 export async function deleteEvaluationMetric(
@@ -169,14 +146,13 @@ export async function deleteEvaluationMetric(
   evaluationId: string,
   metricId: string
 ): Promise<void> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics/${metricId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete metric (${res.status})`);
-  }
+  return apiJson<void>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/${evaluationId}/metrics/${metricId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete metric"
+  );
 }
 
 export async function submitTaskEvaluation(
@@ -189,14 +165,12 @@ export async function submitTaskEvaluation(
     status?: string;
   }
 ): Promise<WorkflowEvaluation> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/submit`, {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to submit evaluation (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowEvaluation>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}/evaluations/submit`,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to submit evaluation"
+  );
 }

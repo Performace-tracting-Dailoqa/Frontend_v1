@@ -39,16 +39,16 @@ const ManagerDataContext = createContext<ManagerDataContextType | undefined>(und
 const CACHE_TTL_MS = 60 * 60 * 1000;
 
 function getManagerCacheKey(): string {
-  if (typeof window === "undefined") return "dailoqa_mgr_cache_v3";
+  if (typeof window === "undefined") return "dailoqa_mgr_cache_v4";
   try {
     const sessionRaw = localStorage.getItem("dailoqa_pms_profile_session") || localStorage.getItem("dailoqa_pms_auth_session");
     if (sessionRaw) {
       const parsed = JSON.parse(sessionRaw);
       const uid = parsed?.user?.id || parsed?.user?.email;
-      if (uid) return `dailoqa_mgr_cache_v3_${uid}`;
+      if (uid) return `dailoqa_mgr_cache_v4_${uid}`;
     }
   } catch {}
-  return "dailoqa_mgr_cache_v3_default";
+  return "dailoqa_mgr_cache_v4_default";
 }
 
 interface CachedPayload {
@@ -113,7 +113,9 @@ export function ManagerDataProvider({ children }: { children: React.ReactNode })
           cached &&
           Date.now() - cached.lastFetchedAt < CACHE_TTL_MS &&
           cached.teams &&
-          cached.teams.length > 0
+          cached.teams.length > 0 &&
+          cached.teamMembers &&
+          cached.teamMembers.length > 0
         ) {
           setTeams(cached.teams || []);
           setTeamMembers(cached.teamMembers || []);

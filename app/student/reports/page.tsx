@@ -9,6 +9,7 @@ import Magnet from "@/components/animations/Magnet";
 import { shortDate } from "@/utils/date";
 import { fetchStudentEvaluations, StudentEvaluationItem } from "@/services/workflowService";
 import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "@/services/apiClient";
 
 export interface GeneratedReport {
   id: string;
@@ -183,9 +184,7 @@ export default function StudentReportsPage() {
 
         const [evalsRes, jpRes] = await Promise.allSettled([
           fetchStudentEvaluations(),
-          fetch("/api/v1/student/japanese-analytics", { headers, cache: "no-store" }).then((r) =>
-            r.ok ? r.json() : null
-          ),
+          apiJson<any>("/api/v1/student/japanese-analytics"),
         ]);
 
         const liveList: GeneratedReport[] = [];

@@ -111,6 +111,9 @@ export async function apiFetch(url: string, options: ApiFetchOptions = {}): Prom
  *
  * @param failureMessage Message used when the backend sends no error body.
  */
+// In-flight GET request deduplication to prevent spamming identical concurrent requests
+const inFlightRequests = new Map<string, Promise<unknown>>();
+
 export async function apiJson<T>(
   url: string,
   options: ApiFetchOptions = {},
@@ -125,36 +128,52 @@ export async function apiJson<T>(
     if (cached !== null) {
       return cached;
     }
+    const pending = inFlightRequests.get(url);
+    if (pending) {
+      return pending as Promise<T>;
+    }
   }
 
-  const res = await apiFetch(url, options);
+  const runRequest = async (): Promise<T> => {
+    const res = await apiFetch(url, options);
 
-  if (res.status === 204) {
-    if (!isGet) invalidateCache();
-    return undefined as T;
+    if (res.status === 204) {
+      if (!isGet) invalidateCache();
+      return undefined as T;
+    }
+
+    let payload: unknown = null;
+    try {
+      payload = await res.json();
+    } catch {
+      payload = null;
+    }
+
+    if (!res.ok) {
+      const { message, code } = extractError(payload, `${failureMessage} (${res.status})`);
+      throw new ApiError(message, res.status, code);
+    }
+
+    // Cache successful GET responses
+    if (isGet && payload !== null) {
+      setCachedData(url, payload);
+    } else if (!isGet) {
+      // Invalidate cached data after state mutations
+      invalidateCache();
+    }
+
+    return payload as T;
+  };
+
+  if (shouldCheckCache) {
+    const promise = runRequest().finally(() => {
+      inFlightRequests.delete(url);
+    });
+    inFlightRequests.set(url, promise);
+    return promise;
   }
 
-  let payload: unknown = null;
-  try {
-    payload = await res.json();
-  } catch {
-    payload = null;
-  }
-
-  if (!res.ok) {
-    const { message, code } = extractError(payload, `${failureMessage} (${res.status})`);
-    throw new ApiError(message, res.status, code);
-  }
-
-  // Cache successful GET responses
-  if (isGet && payload !== null) {
-    setCachedData(url, payload);
-  } else if (!isGet) {
-    // Invalidate cached data after state mutations
-    invalidateCache();
-  }
-
-  return payload as T;
+  return runRequest();
 }
 
 /** True when the failure is a permissions problem rather than a data problem. */

@@ -141,6 +141,33 @@ export default function EvaluationsTab({
   const [generalSavedSuccess, setGeneralSavedSuccess] = useState(false);
   const [pastGeneralEvals, setPastGeneralEvals] = useState<SavedGeneralEvaluation[]>([]);
 
+  // Track submitted evaluations per student so submit button grays out for only that student right after giving marks
+  const [submittedGeneralStudents, setSubmittedGeneralStudents] = useState<Set<string>>(new Set());
+  const [submittedTaskStudents, setSubmittedTaskStudents] = useState<Set<string>>(new Set());
+
+  const markGeneralDirty = () => {
+    if (selectedPersonForEval && submittedGeneralStudents.has(selectedPersonForEval.id)) {
+      setSubmittedGeneralStudents((prev) => {
+        const next = new Set(prev);
+        next.delete(selectedPersonForEval.id);
+        return next;
+      });
+    }
+  };
+
+  const markTaskDirty = () => {
+    if (selectedPersonForEval && activeTaskId) {
+      const key = `${selectedPersonForEval.id}_${activeTaskId}`;
+      if (submittedTaskStudents.has(key)) {
+        setSubmittedTaskStudents((prev) => {
+          const next = new Set(prev);
+          next.delete(key);
+          return next;
+        });
+      }
+    }
+  };
+
   // Load Saved General Evaluation for Person
   useEffect(() => {
     if (!selectedPersonForEval) return;
@@ -207,6 +234,7 @@ export default function EvaluationsTab({
         localStorage.setItem(historyKey, JSON.stringify(updatedHistory));
         setPastGeneralEvals(updatedHistory);
       }
+      setSubmittedGeneralStudents((prev) => new Set(prev).add(selectedPersonForEval.id));
       setGeneralSavedSuccess(true);
       setTimeout(() => setGeneralSavedSuccess(false), 4000);
     } finally {
@@ -676,6 +704,10 @@ export default function EvaluationsTab({
         )
       );
 
+      if (selectedPersonForEval && activeTaskId) {
+        setSubmittedTaskStudents((prev) => new Set(prev).add(`${selectedPersonForEval.id}_${activeTaskId}`));
+      }
+
       setEvalSuccess(true);
       setTimeout(() => setEvalSuccess(false), 4000);
     } catch (err: unknown) {
@@ -765,17 +797,8 @@ export default function EvaluationsTab({
     const totalPossibleMarks = metricRows.reduce((a, b) => a + (Number(b.full_score) || 25), 0);
     const marksPercentage = totalPossibleMarks > 0 ? Math.round((totalManagerMarks / totalPossibleMarks) * 100) : 0;
 
-    // Daily Evaluation Lock Constraints (1 evaluation per day limit)
-    const isGeneralAlreadyEvaluated = pastGeneralEvals.some(
-      (ev) => ev.evaluationDate === generalEvalDate
-    );
-
-    const evalDateStr = taskEval?.evaluated_at ? taskEval.evaluated_at.split("T")[0] : null;
-    const taskCompletedDate = currentActiveTask?.completed_at ? currentActiveTask.completed_at.split("T")[0] : null;
-    const isTaskAlreadyEvaluated =
-      (taskEval?.status === "evaluated" && (evalDateStr === workflowEvalDate || (!evalDateStr && workflowEvalDate === getTodayString()))) ||
-      (evalDateStr !== null && evalDateStr === workflowEvalDate) ||
-      (currentActiveTask?.manager_grade !== null && currentActiveTask?.manager_grade !== undefined && taskCompletedDate === workflowEvalDate);
+    const isGeneralSubmitted = selectedPersonForEval ? submittedGeneralStudents.has(selectedPersonForEval.id) : false;
+    const isTaskSubmitted = selectedPersonForEval && activeTaskId ? submittedTaskStudents.has(`${selectedPersonForEval.id}_${activeTaskId}`) : false;
 
     return (
       <div className="space-y-6">
@@ -879,7 +902,10 @@ export default function EvaluationsTab({
                     type="date"
                     required
                     value={generalEvalDate}
-                    onChange={(e) => setGeneralEvalDate(e.target.value)}
+                    onChange={(e) => {
+                      markGeneralDirty();
+                      setGeneralEvalDate(e.target.value);
+                    }}
                     className="bg-transparent text-xs font-bold text-primary focus:outline-none cursor-pointer"
                   />
                 </div>
@@ -890,23 +916,6 @@ export default function EvaluationsTab({
                   <span className="material-symbols-outlined text-base">check_circle</span>
                   <span>
                     General evaluation marks for {selectedPersonForEval.name} on {generalEvalDate} saved successfully!
-                  </span>
-                </div>
-              )}
-
-              {isGeneralAlreadyEvaluated && (
-                <div className="mb-4 p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between animate-in fade-in">
-                  <div className="flex items-center gap-2.5">
-                    <span className="material-symbols-outlined text-amber-600 text-xl shrink-0">event_busy</span>
-                    <div>
-                      <p className="font-bold">Already Evaluated on {generalEvalDate}</p>
-                      <p className="text-[11px] text-amber-800 mt-0.5">
-                        {selectedPersonForEval.name} has already received general appraisal marks for this date. Only 1 evaluation per person is allowed in one day.
-                      </p>
-                    </div>
-                  </div>
-                  <span className="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase shrink-0">
-                    Daily Limit Reached
                   </span>
                 </div>
               )}
@@ -923,9 +932,11 @@ export default function EvaluationsTab({
                         type="range"
                         min="0"
                         max="100"
-                        disabled={isGeneralAlreadyEvaluated}
                         value={generalOverallRating}
-                        onChange={(e) => setGeneralOverallRating(Number(e.target.value))}
+                        onChange={(e) => {
+                          markGeneralDirty();
+                          setGeneralOverallRating(Number(e.target.value));
+                        }}
                         className="w-full accent-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-50"
                       />
                       <div className="flex items-center gap-1 min-w-[70px]">
@@ -933,10 +944,12 @@ export default function EvaluationsTab({
                           type="number"
                           min="0"
                           max="100"
-                          disabled={isGeneralAlreadyEvaluated}
                           value={generalOverallRating}
-                          onChange={(e) => setGeneralOverallRating(Math.max(0, Math.min(100, Number(e.target.value))))}
-                          className="w-14 px-1.5 py-0.5 bg-surface-container text-center font-mono font-bold text-xs rounded-md border border-outline-variant/40 disabled:opacity-60"
+                          onChange={(e) => {
+                            markGeneralDirty();
+                            setGeneralOverallRating(Math.max(0, Math.min(100, Number(e.target.value))));
+                          }}
+                          className="w-14 px-1.5 py-0.5 bg-surface-container text-center font-mono font-bold text-xs rounded-md border border-outline-variant/40"
                         />
                         <span className="text-xs font-mono text-outline">/100</span>
                       </div>
@@ -949,9 +962,11 @@ export default function EvaluationsTab({
                     </label>
                     <select
                       value={generalPerformanceLevel}
-                      disabled={isGeneralAlreadyEvaluated}
-                      onChange={(e) => setGeneralPerformanceLevel(e.target.value)}
-                      className="w-full px-3 py-2 bg-surface-container-lowest text-xs font-semibold rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer disabled:cursor-not-allowed disabled:opacity-60"
+                      onChange={(e) => {
+                        markGeneralDirty();
+                        setGeneralPerformanceLevel(e.target.value);
+                      }}
+                      className="w-full px-3 py-2 bg-surface-container-lowest text-xs font-semibold rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
                     >
                       <option value="Exceeds Expectations">Exceeds Expectations (High Performer)</option>
                       <option value="Meets Expectations">Meets Expectations (Consistent Delivery)</option>
@@ -995,9 +1010,9 @@ export default function EvaluationsTab({
                             type="range"
                             min="0"
                             max="100"
-                            disabled={isGeneralAlreadyEvaluated}
                             value={comp.score}
                             onChange={(e) => {
+                              markGeneralDirty();
                               const val = Number(e.target.value);
                               setGeneralCompetencies((prev) =>
                                 prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
@@ -1010,15 +1025,15 @@ export default function EvaluationsTab({
                               type="number"
                               min="0"
                               max="100"
-                              disabled={isGeneralAlreadyEvaluated}
                               value={comp.score}
                               onChange={(e) => {
+                                markGeneralDirty();
                                 const val = Math.max(0, Math.min(100, Number(e.target.value)));
                                 setGeneralCompetencies((prev) =>
                                   prev.map((c, i) => (i === idx ? { ...c, score: val } : c))
                                 );
                               }}
-                              className="w-14 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-primary disabled:opacity-60"
+                              className="w-14 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface text-xs focus:outline-none focus:border-primary"
                             />
                             <span className="font-mono text-xs text-outline">/ 100</span>
                           </div>
@@ -1036,11 +1051,13 @@ export default function EvaluationsTab({
                     </label>
                     <textarea
                       rows={3}
-                      disabled={isGeneralAlreadyEvaluated}
                       value={generalStrengths}
-                      onChange={(e) => setGeneralStrengths(e.target.value)}
+                      onChange={(e) => {
+                        markGeneralDirty();
+                        setGeneralStrengths(e.target.value);
+                      }}
                       placeholder="e.g. Strong analytical problem solving, clean code architecture, prompt execution..."
-                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
                     />
                   </div>
 
@@ -1050,11 +1067,13 @@ export default function EvaluationsTab({
                     </label>
                     <textarea
                       rows={3}
-                      disabled={isGeneralAlreadyEvaluated}
                       value={generalAreasOfGrowth}
-                      onChange={(e) => setGeneralAreasOfGrowth(e.target.value)}
+                      onChange={(e) => {
+                        markGeneralDirty();
+                        setGeneralAreasOfGrowth(e.target.value);
+                      }}
                       placeholder="e.g. Expand automated test coverage, participate in team architecture discussions..."
-                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
+                      className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
                     />
                   </div>
                 </div>
@@ -1065,11 +1084,13 @@ export default function EvaluationsTab({
                   </label>
                   <textarea
                     rows={3}
-                    disabled={isGeneralAlreadyEvaluated}
                     value={generalSummaryFeedback}
-                    onChange={(e) => setGeneralSummaryFeedback(e.target.value)}
+                    onChange={(e) => {
+                      markGeneralDirty();
+                      setGeneralSummaryFeedback(e.target.value);
+                    }}
                     placeholder="General appraisal summary, mentor guidance, and targets for the next evaluation date..."
-                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60"
+                    className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
                   />
                 </div>
 
@@ -1078,33 +1099,33 @@ export default function EvaluationsTab({
                     <span className="text-xs text-outline font-medium">
                       Evaluation Date: <span className="font-bold text-on-surface">{generalEvalDate}</span>
                     </span>
-                    {isGeneralAlreadyEvaluated && (
-                      <span className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
-                        <span className="material-symbols-outlined text-xs">lock_clock</span>
-                        Marks already submitted for this date (1/Day Limit)
+                    {isGeneralSubmitted && (
+                      <span className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
+                        <span className="material-symbols-outlined text-xs">check_circle</span>
+                        Marks Submitted
                       </span>
                     )}
                   </div>
 
                   <button
                     type="submit"
-                    disabled={isGeneralAlreadyEvaluated || isSavingGeneral}
+                    disabled={isGeneralSubmitted || isSavingGeneral}
                     className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-2 ${
-                      isGeneralAlreadyEvaluated
-                        ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75 shadow-none"
+                      isGeneralSubmitted
+                        ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed shadow-none"
                         : "bg-primary text-white hover:bg-primary/90 cursor-pointer disabled:opacity-50"
                     }`}
-                    title={isGeneralAlreadyEvaluated ? "Grades can only be given once a day for this student" : "Submit appraisal marks"}
+                    title={isGeneralSubmitted ? "Marks submitted for this student" : "Submit appraisal marks"}
                   >
                     {isSavingGeneral && (
                       <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                     )}
                     <span className="material-symbols-outlined text-base">
-                      {isGeneralAlreadyEvaluated ? "lock" : "save"}
+                      {isGeneralSubmitted ? "check_circle" : "save"}
                     </span>
                     <span>
-                      {isGeneralAlreadyEvaluated
-                        ? `Marks Locked for ${generalEvalDate} (1/Day Limit)`
+                      {isGeneralSubmitted
+                        ? "Marks Submitted"
                         : `Submit General Marks for ${generalEvalDate}`}
                     </span>
                   </button>
@@ -1294,7 +1315,10 @@ export default function EvaluationsTab({
                         <input
                           type="date"
                           value={workflowEvalDate}
-                          onChange={(e) => setWorkflowEvalDate(e.target.value)}
+                          onChange={(e) => {
+                            markTaskDirty();
+                            setWorkflowEvalDate(e.target.value);
+                          }}
                           className="bg-transparent text-xs font-bold text-primary focus:outline-none cursor-pointer"
                         />
                       </div>
@@ -1321,23 +1345,6 @@ export default function EvaluationsTab({
                   {evalError && (
                     <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-xs rounded-xl">
                       {evalError}
-                    </div>
-                  )}
-
-                  {isTaskAlreadyEvaluated && (
-                    <div className="p-4 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs font-medium flex items-center justify-between animate-in fade-in">
-                      <div className="flex items-center gap-2.5">
-                        <span className="material-symbols-outlined text-amber-600 text-xl shrink-0">event_busy</span>
-                        <div>
-                          <p className="font-bold">Already Evaluated on {workflowEvalDate}</p>
-                          <p className="text-[11px] text-amber-800 mt-0.5">
-                            {selectedPersonForEval.name} has already received deliverable marks for this task on {workflowEvalDate}. Only 1 evaluation per person is allowed in one day.
-                          </p>
-                        </div>
-                      </div>
-                      <span className="px-2.5 py-1 rounded-lg bg-amber-200/80 text-amber-900 font-bold text-[10px] uppercase shrink-0">
-                        1 / Day Limit Reached
-                      </span>
                     </div>
                   )}
 
@@ -1374,15 +1381,15 @@ export default function EvaluationsTab({
                                     type="number"
                                     min="0"
                                     max={row.full_score}
-                                    disabled={isTaskAlreadyEvaluated}
                                     value={row.manager_score}
                                     onChange={(e) => {
+                                      markTaskDirty();
                                       const val = Math.max(0, Math.min(row.full_score, Number(e.target.value)));
                                       setMetricRows((prev) =>
                                         prev.map((r, i) => (i === idx ? { ...r, manager_score: val } : r))
                                       );
                                     }}
-                                    className="w-16 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                                    className="w-16 px-2 py-1 bg-surface-container text-center font-mono font-bold rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary text-xs"
                                   />
                                   <span className="text-outline text-[11px]">/{row.full_score}</span>
                                 </div>
@@ -1394,15 +1401,15 @@ export default function EvaluationsTab({
                                 <input
                                   type="text"
                                   placeholder="Specific feedback..."
-                                  disabled={isTaskAlreadyEvaluated}
                                   value={row.manager_remarks || ""}
                                   onChange={(e) => {
+                                    markTaskDirty();
                                     const val = e.target.value;
                                     setMetricRows((prev) =>
                                       prev.map((r, i) => (i === idx ? { ...r, manager_remarks: val } : r))
                                     );
                                   }}
-                                  className="w-full px-2 py-1 bg-surface-container text-xs rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary disabled:opacity-60 disabled:cursor-not-allowed"
+                                  className="w-full px-2 py-1 bg-surface-container text-xs rounded-lg border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary"
                                 />
                               </td>
                             </tr>
@@ -1418,11 +1425,13 @@ export default function EvaluationsTab({
                       </label>
                       <textarea
                         rows={3}
-                        disabled={isTaskAlreadyEvaluated}
                         value={managerRemarks}
-                        onChange={(e) => setManagerRemarks(e.target.value)}
+                        onChange={(e) => {
+                          markTaskDirty();
+                          setManagerRemarks(e.target.value);
+                        }}
                         placeholder="Comprehensive feedback on deliverable code quality, design adherence, and execution..."
-                        className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs disabled:opacity-60 disabled:cursor-not-allowed"
+                        className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-xl border border-outline-variant/40 text-on-surface focus:outline-none focus:border-primary resize-none placeholder:text-outline text-xs"
                       />
                     </div>
 
@@ -1442,33 +1451,33 @@ export default function EvaluationsTab({
                             {marksPercentage}%
                           </span>
                         </div>
-                        {isTaskAlreadyEvaluated && (
-                          <span className="text-[11px] text-amber-800 bg-amber-50 border border-amber-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
-                            <span className="material-symbols-outlined text-xs">lock_clock</span>
-                            Evaluated for this date (1/Day Limit)
+                        {isTaskSubmitted && (
+                          <span className="text-[11px] text-emerald-800 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-lg flex items-center gap-1 font-semibold">
+                            <span className="material-symbols-outlined text-xs">check_circle</span>
+                            Marks Submitted
                           </span>
                         )}
                       </div>
 
                       <button
                         type="submit"
-                        disabled={isTaskAlreadyEvaluated || isSubmittingEval || isLoadingTaskEval}
+                        disabled={isTaskSubmitted || isSubmittingEval || isLoadingTaskEval}
                         className={`px-5 py-2.5 rounded-xl text-xs font-semibold transition-all shadow-xs flex items-center gap-1.5 ${
-                          isTaskAlreadyEvaluated
-                            ? "bg-slate-200 text-slate-400 border border-slate-300 cursor-not-allowed opacity-75 shadow-none"
+                          isTaskSubmitted
+                            ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed shadow-none"
                             : "bg-primary text-white hover:bg-primary/90 cursor-pointer disabled:opacity-50"
                         }`}
-                        title={isTaskAlreadyEvaluated ? "Task marks can only be given once a day" : "Submit task marks"}
+                        title={isTaskSubmitted ? "Marks submitted for this student" : "Submit task marks"}
                       >
                         {isSubmittingEval && (
                           <div className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin" />
                         )}
                         <span className="material-symbols-outlined text-base">
-                          {isTaskAlreadyEvaluated ? "lock" : "check_circle"}
+                          {isTaskSubmitted ? "check_circle" : "save"}
                         </span>
                         <span>
-                          {isTaskAlreadyEvaluated
-                            ? `Marks Locked for ${workflowEvalDate} (1/Day Limit)`
+                          {isTaskSubmitted
+                            ? "Marks Submitted"
                             : `Submit Marks (${workflowEvalDate})`}
                         </span>
                       </button>

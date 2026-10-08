@@ -1,8 +1,15 @@
 
 "use client";
 
-import React, { useState, useMemo } from "react";
-import { Workflow, WorkflowTask, TeamMember, ManagerTeam } from "@/services/workflowService";
+import React, { useState, useMemo, useEffect } from "react";
+import {
+  Workflow,
+  WorkflowTask,
+  TeamMember,
+  ManagerTeam,
+  fetchManagerTeam,
+  fetchManagerTeams,
+} from "@/services/workflowService";
 
 interface WorkflowTasksViewProps {
   workflow: Workflow;
@@ -17,6 +24,7 @@ interface WorkflowTasksViewProps {
     student_id: string;
     due_date?: string;
     priority?: string;
+    workflow_id?: string;
   }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   onNavigateToEvaluations?: (workflow: Workflow, task?: WorkflowTask) => void;
@@ -43,8 +51,8 @@ export default function WorkflowTasksView({
   workflow,
   tasks,
   isLoadingTasks,
-  teams,
-  teamMembers,
+  teams: initialTeams,
+  teamMembers: initialTeamMembers,
   onBack,
   onCreateTask,
   onDeleteTask,
@@ -56,8 +64,43 @@ export default function WorkflowTasksView({
   const [statusFilter, setStatusFilter] = useState("all");
   const [priorityFilter, setPriorityFilter] = useState("all");
 
+  // Dynamic self-healing members and teams state
+  const [activeTeamMembers, setActiveTeamMembers] = useState<TeamMember[]>(initialTeamMembers || []);
+  const [activeTeams, setActiveTeams] = useState<ManagerTeam[]>(initialTeams || []);
+  const [isLoadingMembers, setIsLoadingMembers] = useState<boolean>(!initialTeamMembers || initialTeamMembers.length === 0);
+
+  useEffect(() => {
+    if (initialTeamMembers && initialTeamMembers.length > 0) {
+      setActiveTeamMembers(initialTeamMembers);
+      setIsLoadingMembers(false);
+    } else {
+      setIsLoadingMembers(true);
+      fetchManagerTeam()
+        .then((members) => {
+          if (members && members.length > 0) {
+            setActiveTeamMembers(members);
+          }
+        })
+        .catch((err) => console.warn("Fallback fetchManagerTeam error:", err))
+        .finally(() => setIsLoadingMembers(false));
+    }
+  }, [initialTeamMembers]);
+
+  useEffect(() => {
+    if (initialTeams && initialTeams.length > 0) {
+      setActiveTeams(initialTeams);
+    } else {
+      fetchManagerTeams()
+        .then((t) => {
+          if (t && t.length > 0) setActiveTeams(t);
+        })
+        .catch((err) => console.warn("Fallback fetchManagerTeams error:", err));
+    }
+  }, [initialTeams]);
+
   // Create Task Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [modalBatchId, setModalBatchId] = useState<string>(workflow.batch_id || "all");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [studentId, setStudentId] = useState("");
@@ -69,17 +112,82 @@ export default function WorkflowTasksView({
   // Identify Assigned Batch Details
   const assignedBatch = useMemo(() => {
     if (!workflow.batch_id) return null;
-    return teams.find((t) => t.id === workflow.batch_id) || null;
-  }, [workflow.batch_id, teams]);
+    return activeTeams.find((t) => t.id === workflow.batch_id) || null;
+  }, [workflow.batch_id, activeTeams]);
 
   const batchName = workflow.batch_name || assignedBatch?.name || (workflow.batch_id ? "Assigned Cohort" : "All Cohorts / General");
 
-  // Filter team members applicable to this workflow's batch
+  // Dynamic available batches combining teams, workflow's batch, and student batches
+  const availableBatches = useMemo(() => {
+    const map = new Map<string, { id: string; name: string }>();
+    activeTeams.forEach((t) => {
+      map.set(t.id, { id: t.id, name: t.name });
+    });
+    if (workflow.batch_id && !map.has(workflow.batch_id)) {
+      map.set(workflow.batch_id, {
+        id: workflow.batch_id,
+        name: workflow.batch_name || "Assigned Workflow Batch",
+      });
+    }
+    activeTeamMembers.forEach((m) => {
+      if (m.batch_id && !map.has(m.batch_id)) {
+        map.set(m.batch_id, {
+          id: m.batch_id,
+          name: m.batch_name || `Batch ${m.batch_id.slice(0, 8)}`,
+        });
+      }
+    });
+    return Array.from(map.values());
+  }, [activeTeams, workflow.batch_id, workflow.batch_name, activeTeamMembers]);
+
+  // Filter team members applicable to the currently selected batch in the modal
+  const modalLearners = useMemo(() => {
+    const list = activeTeamMembers;
+    if (!list || list.length === 0) return [];
+
+    if (!modalBatchId || modalBatchId === "all") {
+      return list;
+    }
+
+    const filtered = list.filter(
+      (m) => String(m.batch_id || "").toLowerCase() === String(modalBatchId).toLowerCase()
+    );
+
+    if (filtered.length === 0) {
+      const selectedBatchObj = availableBatches.find((b) => b.id === modalBatchId);
+      if (selectedBatchObj) {
+        const byName = list.filter(
+          (m) => m.batch_name && m.batch_name.toLowerCase() === selectedBatchObj.name.toLowerCase()
+        );
+        if (byName.length > 0) return byName;
+      }
+      // Gracefully fall back to all members so the user is NEVER stuck with an empty list!
+      return list;
+    }
+    return filtered;
+  }, [modalBatchId, activeTeamMembers, availableBatches]);
+
+  // Learners enrolled in the workflow's configured batch (for header metrics)
   const batchLearners = useMemo(() => {
-    if (!workflow.batch_id) return teamMembers;
-    const filtered = teamMembers.filter((m) => m.batch_id === workflow.batch_id);
-    return filtered.length > 0 ? filtered : teamMembers;
-  }, [workflow.batch_id, teamMembers]);
+    const list = activeTeamMembers;
+    if (!workflow.batch_id) return list;
+    const filtered = list.filter(
+      (m) => String(m.batch_id || "").toLowerCase() === String(workflow.batch_id).toLowerCase()
+    );
+    return filtered.length > 0 ? filtered : list;
+  }, [workflow.batch_id, activeTeamMembers]);
+
+  const openCreateTaskModal = () => {
+    const defaultBatch = workflow.batch_id || (availableBatches.length > 0 ? availableBatches[0].id : "all");
+    setModalBatchId(defaultBatch);
+    setStudentId("");
+    setTitle("");
+    setDescription("");
+    setDueDate("");
+    setPriority("medium");
+    setError(null);
+    setIsModalOpen(true);
+  };
 
   // Tasks belonging to this workflow
   const workflowTasks = useMemo(() => {
@@ -131,19 +239,23 @@ export default function WorkflowTasksView({
 
   const handleCreateTaskSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!title.trim() || !studentId) return;
+    if (!title.trim() || !studentId) {
+      setError("Please specify a task title and select a student (or choose assign to all).");
+      return;
+    }
     setIsSubmitting(true);
     setError(null);
     try {
       if (studentId === "ALL_BATCH") {
         await Promise.all(
-          batchLearners.map((m) =>
+          modalLearners.map((m) =>
             onCreateTask({
               title: title.trim(),
               description: description.trim() || undefined,
               student_id: m.id,
               due_date: dueDate || undefined,
               priority: priority,
+              workflow_id: workflow.id,
             })
           )
         );
@@ -154,6 +266,7 @@ export default function WorkflowTasksView({
           student_id: studentId,
           due_date: dueDate || undefined,
           priority: priority,
+          workflow_id: workflow.id,
         });
       }
       setTitle("");
@@ -210,10 +323,7 @@ export default function WorkflowTasksView({
             </button>
           )}
           <button
-            onClick={() => {
-              setStudentId(batchLearners.length > 0 ? batchLearners[0].id : "");
-              setIsModalOpen(true);
-            }}
+            onClick={openCreateTaskModal}
             className="px-4 py-2 bg-primary text-white text-body-sm font-semibold rounded-xl hover:bg-primary/90 transition-all shadow-xs flex items-center gap-2 cursor-pointer"
           >
             <span className="material-symbols-outlined text-lg">add_task</span>
@@ -364,10 +474,7 @@ export default function WorkflowTasksView({
               : `No tasks have been assigned in this workflow track yet. Assign a task to get started.`}
           </p>
           <button
-            onClick={() => {
-              setStudentId(batchLearners.length > 0 ? batchLearners[0].id : "");
-              setIsModalOpen(true);
-            }}
+            onClick={openCreateTaskModal}
             className="px-4 py-2 bg-primary text-white text-xs font-semibold rounded-lg hover:bg-primary/90 transition-all cursor-pointer"
           >
             Assign First Task
@@ -406,7 +513,7 @@ export default function WorkflowTasksView({
                 {filteredTasks.map((task) => {
                   const priorityInfo = PRIORITY_BADGES[task.priority?.toLowerCase() || "medium"] || PRIORITY_BADGES.medium;
                   const statusInfo = STATUS_BADGES[task.status?.toLowerCase() || "todo"] || STATUS_BADGES.todo;
-                  const student = teamMembers.find((m) => m.id === task.student_id);
+                  const student = activeTeamMembers.find((m) => m.id === task.student_id);
                   const studentName = task.student_name || student?.name || "Assigned Student";
                   const studentEmail = task.student_email || student?.email || "";
                   const enrollmentNo = task.enrollment_no || student?.enrollment_no || "";
@@ -534,13 +641,14 @@ export default function WorkflowTasksView({
             <div className="flex items-center justify-between mb-4">
               <div>
                 <h3 className="text-title-md font-bold text-on-surface font-headline">
-                  Assign Task to {batchName}
+                  Assign Task
                 </h3>
                 <p className="text-xs text-on-surface-variant mt-0.5">
                   Workflow: <span className="font-semibold text-on-surface">{workflow.name}</span>
                 </p>
               </div>
               <button
+                type="button"
                 onClick={() => setIsModalOpen(false)}
                 className="text-outline hover:text-on-surface text-lg cursor-pointer"
               >
@@ -555,28 +663,80 @@ export default function WorkflowTasksView({
             )}
 
             <form onSubmit={handleCreateTaskSubmit} className="space-y-4">
+              {/* Target Batch / Team Selector */}
               <div>
                 <label className="block text-xs font-semibold text-on-surface mb-1">
-                  Assign To Student *
+                  Target Batch / Team *
                 </label>
+                <select
+                  value={modalBatchId}
+                  onChange={(e) => {
+                    const newBatch = e.target.value;
+                    setModalBatchId(newBatch);
+                    setStudentId("");
+                  }}
+                  className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer font-medium"
+                >
+                  <option value="all">
+                    All Teams / General Pool ({activeTeamMembers.length} learners)
+                  </option>
+                  {availableBatches.map((b) => {
+                    const count = activeTeamMembers.filter(
+                      (m) =>
+                        String(m.batch_id || "").toLowerCase() === String(b.id).toLowerCase() ||
+                        (m.batch_name && m.batch_name.toLowerCase() === b.name.toLowerCase())
+                    ).length;
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {b.name} ({count} learners)
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              {/* Student Selection */}
+              <div>
+                <div className="flex items-center justify-between mb-1">
+                  <label className="block text-xs font-semibold text-on-surface">
+                    Assign To Student *
+                  </label>
+                  {isLoadingMembers && (
+                    <span className="text-[11px] text-primary flex items-center gap-1 font-medium">
+                      <span className="w-2.5 h-2.5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
+                      Loading learners...
+                    </span>
+                  )}
+                </div>
                 <select
                   required
                   value={studentId}
                   onChange={(e) => setStudentId(e.target.value)}
                   className="w-full px-3 py-2 bg-surface-container text-body-sm rounded-lg border border-outline-variant/50 text-on-surface focus:outline-none focus:border-primary cursor-pointer"
                 >
-                  <option value="">Select a student...</option>
-                  {batchLearners.length > 1 && (
+                  <option value="">
+                    {isLoadingMembers
+                      ? "Loading students..."
+                      : modalLearners.length > 0
+                      ? `Select a student (${modalLearners.length} available)...`
+                      : `No students in this batch — switch to All Teams (${activeTeamMembers.length} available)`}
+                  </option>
+                  {modalLearners.length > 1 && (
                     <option value="ALL_BATCH" className="font-bold text-primary">
-                      ✦ Assign to ALL Students in this Batch ({batchLearners.length})
+                      ✦ Assign to ALL Students in this Batch ({modalLearners.length} learners)
                     </option>
                   )}
-                  {batchLearners.map((m) => (
+                  {modalLearners.map((m) => (
                     <option key={m.id} value={m.id}>
-                      {m.name} {m.enrollment_no ? `(${m.enrollment_no})` : ""} — {m.email}
+                      {m.name} {m.enrollment_no && m.enrollment_no !== "—" ? `(${m.enrollment_no})` : ""} — {m.email} {m.batch_name ? `[${m.batch_name}]` : ""}
                     </option>
                   ))}
                 </select>
+                {modalLearners.length === 0 && !isLoadingMembers && (
+                  <p className="text-xs text-amber-600 mt-1">
+                    No students currently assigned to this batch. Switch Target Batch / Team to &ldquo;All Teams / General Pool&rdquo; above to select from all {activeTeamMembers.length} learners.
+                  </p>
+                )}
               </div>
 
               <div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { getAuthToken } from "@/utils/auth";
+import { apiJson } from "./apiClient";
 
 export interface Workflow {
   id: string;
@@ -57,18 +57,6 @@ export interface PaginatedResponse<T> {
   page_size: number;
 }
 
-function getHeaders(): HeadersInit {
-  const token = getAuthToken();
-  const headers: Record<string, string> = {
-    Accept: "application/json",
-    "Content-Type": "application/json",
-  };
-  if (token) {
-    headers.Authorization = `Bearer ${token}`;
-  }
-  return headers;
-}
-
 // ---------------------------------------------------------------------------
 // Manager Workflows (/api/v1/manager/workflows)
 // ---------------------------------------------------------------------------
@@ -76,69 +64,43 @@ function getHeaders(): HeadersInit {
 export async function fetchWorkflows(page = 1, pageSize = 50, batchId?: string): Promise<PaginatedResponse<Workflow>> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (batchId && batchId !== "all") params.append("batch_id", batchId);
-  const res = await fetch(`/api/v1/manager/workflows?${params.toString()}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch workflows (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<PaginatedResponse<Workflow>>(`/api/v1/manager/workflows?${params.toString()}`, {}, "Failed to fetch workflows");
 }
 
 export async function getWorkflow(workflowId: string): Promise<Workflow> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch workflow (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<Workflow>(`/api/v1/manager/workflows/${workflowId}`, {}, "Failed to fetch workflow");
 }
 
 export async function createWorkflow(payload: { name: string; description?: string; is_active?: boolean; batch_id?: string }): Promise<Workflow> {
-  const res = await fetch("/api/v1/manager/workflows", {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify({ is_active: true, ...payload }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create workflow (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<Workflow>(
+    "/api/v1/manager/workflows",
+    {
+      method: "POST",
+      body: JSON.stringify({ is_active: true, ...payload }),
+    },
+    "Failed to create workflow"
+  );
 }
 
 export async function updateWorkflow(workflowId: string, payload: Partial<{ name: string; description: string; is_active: boolean }>): Promise<Workflow> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
-    method: "PUT",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to update workflow (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<Workflow>(
+    `/api/v1/manager/workflows/${workflowId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update workflow"
+  );
 }
 
 export async function deleteWorkflow(workflowId: string): Promise<void> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-    credentials: "same-origin",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete workflow (${res.status})`);
-  }
+  return apiJson<void>(
+    `/api/v1/manager/workflows/${workflowId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete workflow"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -147,67 +109,51 @@ export async function deleteWorkflow(workflowId: string): Promise<void> {
 
 export async function fetchWorkflowTasks(workflowId: string, page = 1, pageSize = 50): Promise<PaginatedResponse<WorkflowTask>> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks?${params.toString()}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch workflow tasks (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<PaginatedResponse<WorkflowTask>>(
+    `/api/v1/manager/workflows/${workflowId}/tasks?${params.toString()}`,
+    {},
+    "Failed to fetch workflow tasks"
+  );
 }
 
 export async function getWorkflowTask(workflowId: string, taskId: string): Promise<WorkflowTask> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch task (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowTask>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`,
+    {},
+    "Failed to fetch task"
+  );
 }
 
 export async function createWorkflowTask(workflowId: string, payload: { title: string; description?: string; student_id: string; status?: string }): Promise<WorkflowTask> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks`, {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify({ workflow_id: workflowId, status: "pending", ...payload }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create task (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowTask>(
+    `/api/v1/manager/workflows/${workflowId}/tasks`,
+    {
+      method: "POST",
+      body: JSON.stringify({ workflow_id: workflowId, status: "pending", ...payload }),
+    },
+    "Failed to create task"
+  );
 }
 
 export async function updateWorkflowTask(workflowId: string, taskId: string, payload: Partial<{ title: string; description: string; status: string; student_id: string }>): Promise<WorkflowTask> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`, {
-    method: "PUT",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to update task (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<WorkflowTask>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`,
+    {
+      method: "PUT",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update task"
+  );
 }
 
 export async function deleteWorkflowTask(workflowId: string, taskId: string): Promise<void> {
-  const res = await fetch(`/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`, {
-    method: "DELETE",
-    headers: getHeaders(),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to delete task (${res.status})`);
-  }
+  return apiJson<void>(
+    `/api/v1/manager/workflows/${workflowId}/tasks/${taskId}`,
+    {
+      method: "DELETE",
+    },
+    "Failed to delete task"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -242,70 +188,37 @@ export interface ManagerTeam {
 }
 
 export async function fetchManagerTeams(): Promise<ManagerTeam[]> {
-  const res = await fetch("/api/v1/manager/teams", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager teams (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<ManagerTeam[]>("/api/v1/manager/teams", {}, "Failed to fetch manager teams");
 }
 
 export async function createManagerTeam(payload: { name: string; department?: string; student_ids?: string[] }): Promise<ManagerTeam> {
-  const res = await fetch("/api/v1/manager/teams", {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create manager team (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<ManagerTeam>(
+    "/api/v1/manager/teams",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to create manager team"
+  );
 }
 
 export async function fetchAvailableStudents(): Promise<TeamMember[]> {
-  const res = await fetch("/api/v1/manager/available-students", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch available students (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<TeamMember[]>("/api/v1/manager/available-students", {}, "Failed to fetch available students");
 }
 
 export async function addTeamMembers(teamId: string, studentIds: string[]): Promise<{ message: string; count: number }> {
-  const res = await fetch(`/api/v1/manager/teams/${teamId}/members`, {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify({ student_ids: studentIds }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to add team members (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<{ message: string; count: number }>(
+    `/api/v1/manager/teams/${teamId}/members`,
+    {
+      method: "POST",
+      body: JSON.stringify({ student_ids: studentIds }),
+    },
+    "Failed to add team members"
+  );
 }
 
 export async function fetchManagerTeam(): Promise<TeamMember[]> {
-  const res = await fetch("/api/v1/manager/team", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch team members (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<TeamMember[]>("/api/v1/manager/team", {}, "Failed to fetch team members");
 }
 
 export interface ManagerStudentDetails {
@@ -321,16 +234,11 @@ export interface ManagerStudentDetails {
 }
 
 export async function fetchManagerStudentDetails(studentId: string): Promise<ManagerStudentDetails> {
-  const res = await fetch(`/api/v1/manager/students/${studentId}/details`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch student details (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<ManagerStudentDetails>(
+    `/api/v1/manager/students/${studentId}/details`,
+    {},
+    "Failed to fetch student details"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -370,16 +278,11 @@ export async function fetchStudentTasks(
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (statusFilter) params.append("status", statusFilter);
 
-  const res = await fetch(`/api/v1/student/tasks?${params.toString()}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch student tasks (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<PaginatedResponse<StudentTaskItem>>(
+    `/api/v1/student/tasks?${params.toString()}`,
+    {},
+    "Failed to fetch student tasks"
+  );
 }
 
 export async function updateStudentTaskStatus(
@@ -396,17 +299,14 @@ export async function updateStudentTaskStatus(
   if (data?.submission_notes !== undefined) payload.submission_notes = data.submission_notes;
   if (data?.student_metric_grades !== undefined) payload.student_metric_grades = data.student_metric_grades;
 
-  const res = await fetch(`/api/v1/student/tasks/${taskId}`, {
-    method: "PATCH",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to update task status (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<StudentTaskItem>(
+    `/api/v1/student/tasks/${taskId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify(payload),
+    },
+    "Failed to update task status"
+  );
 }
 
 
@@ -440,16 +340,11 @@ export interface StudentEvaluationItem {
 }
 
 export async function fetchStudentEvaluations(): Promise<{ total: number; items: StudentEvaluationItem[] }> {
-  const res = await fetch("/api/v1/student/evaluations", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch evaluations (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<{ total: number; items: StudentEvaluationItem[] }>(
+    "/api/v1/student/evaluations",
+    {},
+    "Failed to fetch evaluations"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -498,33 +393,25 @@ export interface StudentFeedbacksResponse {
 }
 
 export async function fetchStudentFeedbacks(): Promise<StudentFeedbacksResponse> {
-  const res = await fetch("/api/v1/student/feedbacks", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch feedbacks (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<StudentFeedbacksResponse>(
+    "/api/v1/student/feedbacks",
+    {},
+    "Failed to fetch feedbacks"
+  );
 }
 
 export async function postStudentFeedbackComment(
   feedbackId: string,
   comment: string
 ): Promise<{ success: boolean; comment: FeedbackCommentItem; message: string }> {
-  const res = await fetch(`/api/v1/student/feedbacks/${feedbackId}/comments`, {
-    method: "POST",
-    headers: getHeaders(),
-    credentials: "same-origin",
-    body: JSON.stringify({ comment }),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to post feedback comment (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<{ success: boolean; comment: FeedbackCommentItem; message: string }>(
+    `/api/v1/student/feedbacks/${feedbackId}/comments`,
+    {
+      method: "POST",
+      body: JSON.stringify({ comment }),
+    },
+    "Failed to post feedback comment"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -543,54 +430,32 @@ export interface Batch {
 }
 
 export async function fetchTeacherBatches(): Promise<Batch[]> {
-  const res = await fetch("/api/v1/teacher/batches", {
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch batches (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<Batch[]>("/api/v1/teacher/batches", {}, "Failed to fetch batches");
 }
 
 export async function createTeacherBatch(payload: { name: string; department?: string; status?: string; student_ids?: string[] }): Promise<Batch> {
-  const res = await fetch("/api/v1/teacher/batches", {
-    method: "POST",
-    headers: getHeaders(),
-    body: JSON.stringify(payload),
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to create batch (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<Batch>(
+    "/api/v1/teacher/batches",
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+    "Failed to create batch"
+  );
 }
 
 export async function fetchTeacherUnassignedStudents(department?: string): Promise<TeamMember[]> {
   const params = new URLSearchParams();
   if (department) params.append("department", department);
-  const res = await fetch(`/api/v1/teacher/students/unassigned?${params.toString()}`, {
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch unassigned students (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<TeamMember[]>(
+    `/api/v1/teacher/students/unassigned?${params.toString()}`,
+    {},
+    "Failed to fetch unassigned students"
+  );
 }
 
 export async function fetchTeacherStudents(): Promise<TeamMember[]> {
-  const res = await fetch("/api/v1/teacher/students", {
-    headers: getHeaders(),
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch teacher students (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<TeamMember[]>("/api/v1/teacher/students", {}, "Failed to fetch teacher students");
 }
 
 // ---------------------------------------------------------------------------
@@ -651,16 +516,7 @@ export interface ManagerProgressSummary {
 }
 
 export async function fetchManagerProgressSummary(): Promise<ManagerProgressSummary> {
-  const res = await fetch("/api/v1/manager/progress", {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager progress (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<ManagerProgressSummary>("/api/v1/manager/progress", {}, "Failed to fetch manager progress");
 }
 
 export async function fetchManagerTasks(
@@ -670,15 +526,10 @@ export async function fetchManagerTasks(
 ): Promise<PaginatedResponse<WorkflowTask>> {
   const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
   if (status) params.append("status", status);
-  const res = await fetch(`/api/v1/manager/tasks?${params.toString()}`, {
-    headers: getHeaders(),
-    credentials: "same-origin",
-    cache: "no-store",
-  });
-  if (!res.ok) {
-    const err = await res.json().catch(() => ({}));
-    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch manager tasks (${res.status})`);
-  }
-  return await res.json();
+  return apiJson<PaginatedResponse<WorkflowTask>>(
+    `/api/v1/manager/tasks?${params.toString()}`,
+    {},
+    "Failed to fetch manager tasks"
+  );
 }
 

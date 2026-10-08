@@ -4,6 +4,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { getAuthToken, fetchMe } from "@/utils/auth";
+import { apiJson } from "@/services/apiClient";
 
 interface MentorInfo {
   id?: string;
@@ -81,15 +82,8 @@ export default function StudentMentorsPage() {
   const loadData = async () => {
     setIsLoading(true);
     try {
-      const token = getAuthToken();
-      const res = await fetch("/api/v1/student/profile/overview", {
-        headers: {
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-      });
-      if (res.ok) {
-        const data = await res.json();
+      const data = await apiJson<CohortContextResponse>("/api/v1/student/profile/overview");
+      if (data) {
         setCohortData(data);
       }
     } catch (err) {
@@ -225,28 +219,20 @@ export default function StudentMentorsPage() {
     setIsSendingMessage(true);
     setStatusMessage(null);
     try {
-      const token = getAuthToken();
-      const res = await fetch("/api/v1/student/messages", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Accept: "application/json",
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      const resData = await apiJson<any>(
+        "/api/v1/student/messages",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            recipient_type: messageRecipient.type,
+            recipient_name: messageRecipient.name,
+            recipient_email: messageRecipient.email,
+            subject: messageSubject.trim() || `Inquiry from Student`,
+            message: messageContent.trim(),
+          }),
         },
-        body: JSON.stringify({
-          recipient_type: messageRecipient.type,
-          recipient_name: messageRecipient.name,
-          recipient_email: messageRecipient.email,
-          subject: messageSubject.trim() || `Inquiry from Student`,
-          message: messageContent.trim(),
-        }),
-      });
-
-      if (!res.ok) {
-        throw new Error("Failed to dispatch message");
-      }
-
-      const resData = await res.json();
+        "Failed to dispatch message"
+      );
       setStatusMessage({
         type: "success",
         text: `Personal message sent successfully to ${messageRecipient.name}!`,

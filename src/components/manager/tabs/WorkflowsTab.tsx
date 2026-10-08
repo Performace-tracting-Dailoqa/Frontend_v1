@@ -24,6 +24,7 @@ interface WorkflowsTabProps {
     student_id: string;
     due_date?: string;
     priority?: string;
+    workflow_id?: string;
   }) => Promise<void>;
   onDeleteTask: (taskId: string) => Promise<void>;
   onNavigateToEvaluations?: (workflow: Workflow, task?: WorkflowTask) => void;

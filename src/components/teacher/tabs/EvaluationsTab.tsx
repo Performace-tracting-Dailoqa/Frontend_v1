@@ -115,6 +115,19 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
     batchName?: string;
   } | null>(null);
 
+  // Track submitted student IDs so the submit button grays out for only that student right after giving marks
+  const [submittedStudentIds, setSubmittedStudentIds] = useState<Set<string>>(new Set());
+
+  const markStudentDirty = () => {
+    if (selectedStudent && submittedStudentIds.has(selectedStudent.id)) {
+      setSubmittedStudentIds((prev) => {
+        const next = new Set(prev);
+        next.delete(selectedStudent.id);
+        return next;
+      });
+    }
+  };
+
   // Check if navigating from a workflow with scoped metrics
   useEffect(() => {
     if (typeof window === "undefined") return;
@@ -260,6 +273,7 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
 
   // Metric update handler
   const handleMetricScoreChange = (index: number, newScore: number) => {
+    markStudentDirty();
     const updated = [...metrics];
     const maxScore = updated[index].full_score || 100;
     updated[index].score = Math.max(0, Math.min(maxScore, newScore));
@@ -267,6 +281,7 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
   };
 
   const handleMetricRemarkChange = (index: number, newRemark: string) => {
+    markStudentDirty();
     const updated = [...metrics];
     updated[index].remarks = newRemark;
     setMetrics(updated);
@@ -294,7 +309,7 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
     return { grade: "D / 要復習 (Needs Review)", color: "text-rose-700 bg-rose-50 border-rose-300" };
   }, [computedPercentage]);
 
-  // Check if learner already has an evaluation recorded on the selected date (Strict 1/day rule)
+  // Check if learner already has an evaluation recorded on the selected date
   const existingEvalForDate = useMemo(() => {
     if (!studentAnalytics?.evaluations_history || !evalDate) return null;
     return studentAnalytics.evaluations_history.find(
@@ -387,6 +402,9 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
 
       await createStudentJapaneseEvaluation(selectedStudent.id, payload);
 
+      // Gray out submit button for only this student
+      setSubmittedStudentIds((prev) => new Set(prev).add(selectedStudent.id));
+
       setStatusMessage({
         type: "success",
         text: existingEvalForDate
@@ -408,6 +426,7 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
   };
 
   const selectedBatch = batches.find((b) => b.id === selectedBatchId);
+  const isStudentSubmitted = selectedStudent ? submittedStudentIds.has(selectedStudent.id) : false;
 
   return (
     <div className="space-y-6">
@@ -662,9 +681,6 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <span className="material-symbols-outlined text-primary text-base">tune</span>
                     <span>Assessment Parameters</span>
                   </h3>
-                  <span className="text-[11px] text-outline font-semibold">
-                    Policy: 1 evaluation per learner per day
-                  </span>
                 </div>
 
                 {existingEvalForDate && (
@@ -679,7 +695,7 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                       </div>
                     </div>
                     <span className="px-2.5 py-1 rounded-lg bg-indigo-100 text-[#4B2EF5] font-bold text-[10px] uppercase shrink-0 border border-indigo-200">
-                      Update Mode (1/Day)
+                      Update Mode
                     </span>
                   </div>
                 )}
@@ -691,7 +707,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                       type="text"
                       required
                       value={evalTitle}
-                      onChange={(e) => setEvalTitle(e.target.value)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setEvalTitle(e.target.value);
+                      }}
                       placeholder="e.g. JLPT N5 Daily Drill - Week 4"
                       className="w-full px-3 py-2 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium"
                     />
@@ -701,7 +720,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <label className="block font-semibold text-on-surface mb-1">Assessment Type</label>
                     <select
                       value={evalType}
-                      onChange={(e) => setEvalType(e.target.value as any)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setEvalType(e.target.value as any);
+                      }}
                       className="w-full px-3 py-2 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium cursor-pointer"
                     >
                       <option value="daily">Daily Drill (日々のドリル)</option>
@@ -715,7 +737,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <label className="block font-semibold text-on-surface mb-1">Target JLPT Level</label>
                     <select
                       value={jlptLevel}
-                      onChange={(e) => setJlptLevel(e.target.value as any)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setJlptLevel(e.target.value as any);
+                      }}
                       className="w-full px-3 py-2 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-bold text-primary cursor-pointer"
                     >
                       <option value="N5">JLPT N5 (Basic)</option>
@@ -731,7 +756,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <input
                       type="date"
                       value={evalDate}
-                      onChange={(e) => setEvalDate(e.target.value)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setEvalDate(e.target.value);
+                      }}
                       className="w-full px-3 py-2 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20 font-medium cursor-pointer"
                     />
                   </div>
@@ -855,7 +883,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <textarea
                       rows={2}
                       value={feedback}
-                      onChange={(e) => setFeedback(e.target.value)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setFeedback(e.target.value);
+                      }}
                       placeholder="e.g. Excellent progress in Kanji recognition this week. Recommend practicing particle drills for に vs で..."
                       className="w-full p-3 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
@@ -868,7 +899,10 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                     <input
                       type="text"
                       value={remarks}
-                      onChange={(e) => setRemarks(e.target.value)}
+                      onChange={(e) => {
+                        markStudentDirty();
+                        setRemarks(e.target.value);
+                      }}
                       placeholder="e.g. Student is ready for JLPT N5 mock exam on Friday."
                       className="w-full px-3 py-2 bg-surface-container border border-outline-variant/40 rounded-xl text-on-surface focus:outline-none focus:ring-2 focus:ring-primary/20"
                     />
@@ -878,7 +912,12 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
                 {/* Save Button Bar */}
                 <div className="pt-2 flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-t border-outline-variant/30">
                   <div className="text-xs text-outline">
-                    {existingEvalForDate ? (
+                    {isStudentSubmitted ? (
+                      <span className="text-emerald-700 font-semibold flex items-center gap-1">
+                        <span className="material-symbols-outlined text-sm">check_circle</span>
+                        <span>Marks submitted for {selectedStudent.full_name || selectedStudent.name}.</span>
+                      </span>
+                    ) : existingEvalForDate ? (
                       <span className="text-indigo-700 font-semibold flex items-center gap-1">
                         <span className="material-symbols-outlined text-sm">sync</span>
                         <span>Saving will update this learner&apos;s evaluation for {evalDate} with new score ({computedPercentage}%).</span>
@@ -892,13 +931,22 @@ export default function EvaluationsTab({ initialStudent, initialStudentId }: Eva
 
                   <button
                     type="submit"
-                    disabled={isSaving}
-                    className="px-6 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-2 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white cursor-pointer disabled:opacity-50"
+                    disabled={isSaving || isStudentSubmitted}
+                    className={`px-6 py-2.5 rounded-xl font-bold text-xs shadow-xs transition-all flex items-center gap-2 ${
+                      isStudentSubmitted
+                        ? "bg-slate-200 text-slate-500 border border-slate-300 cursor-not-allowed shadow-none"
+                        : "bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white cursor-pointer disabled:opacity-50"
+                    }`}
                   >
                     {isSaving ? (
                       <>
                         <span className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
                         <span>Saving to Database...</span>
+                      </>
+                    ) : isStudentSubmitted ? (
+                      <>
+                        <span className="material-symbols-outlined text-base">check_circle</span>
+                        <span>Marks Submitted</span>
                       </>
                     ) : existingEvalForDate ? (
                       <>

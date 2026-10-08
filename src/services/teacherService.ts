@@ -637,6 +637,180 @@ export async function fetchTeacherEvaluationHistory(
   return res.json();
 }
 
+// ---------------------------------------------------------------------------
+// Teacher Workflows & Homework/Test Assignments
+// ---------------------------------------------------------------------------
+
+export interface TeacherWorkflow {
+  id: string;
+  batch_id?: string | null;
+  batch_name?: string | null;
+  name: string;
+  description?: string | null;
+  status?: string | null;
+  start_date?: string | null;
+  end_date?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface TeacherWorkflowTask {
+  id: string;
+  workflow_id: string;
+  workflow_name?: string | null;
+  student_id: string;
+  student_name?: string | null;
+  student_email?: string | null;
+  enrollment_no?: string | null;
+  title: string;
+  description?: string | null;
+  status: string;
+  priority?: string | null;
+  start_date?: string | null;
+  due_date?: string | null;
+  submitted_at?: string | null;
+  completed_at?: string | null;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface PaginatedTeacherWorkflows {
+  total: number;
+  page: number;
+  page_size: number;
+  items: TeacherWorkflow[];
+}
+
+export interface PaginatedTeacherTasks {
+  total: number;
+  page: number;
+  page_size: number;
+  items: TeacherWorkflowTask[];
+}
+
+export async function fetchTeacherWorkflows(
+  batchId?: string,
+  page = 1,
+  pageSize = 50
+): Promise<PaginatedTeacherWorkflows> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  if (batchId && batchId !== "all") params.append("batch_id", batchId);
+
+  const res = await fetch(`/api/v1/teacher/workflows?${params.toString()}`, {
+    method: "GET",
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch teacher workflows: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createTeacherWorkflow(data: {
+  name: string;
+  description?: string;
+  batch_id?: string;
+  start_date?: string;
+  end_date?: string;
+}): Promise<TeacherWorkflow> {
+  const res = await fetch(`/api/v1/teacher/workflows`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to create workflow: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteTeacherWorkflow(workflowId: string): Promise<void> {
+  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to delete workflow: ${res.statusText}`);
+  }
+}
+
+export async function fetchTeacherWorkflowTasks(
+  workflowId: string,
+  page = 1,
+  pageSize = 100
+): Promise<PaginatedTeacherTasks> {
+  const params = new URLSearchParams({ page: String(page), page_size: String(pageSize) });
+  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks?${params.toString()}`, {
+    method: "GET",
+    headers: getHeaders(),
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch tasks: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function createTeacherWorkflowTask(
+  workflowId: string,
+  data: {
+    title: string;
+    description?: string;
+    student_id: string;
+    due_date?: string;
+    priority?: string;
+  }
+): Promise<TeacherWorkflowTask> {
+  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify({ ...data, workflow_id: workflowId }),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to create task: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function bulkCreateTeacherWorkflowTasks(
+  workflowId: string,
+  data: {
+    title: string;
+    description?: string;
+    due_date?: string;
+    priority?: string;
+    student_ids: string[];
+  }
+): Promise<{ success: boolean; assigned_count: number; tasks: TeacherWorkflowTask[] }> {
+  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/bulk-tasks`, {
+    method: "POST",
+    headers: getHeaders(),
+    body: JSON.stringify(data),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to bulk assign tasks: ${res.statusText}`);
+  }
+  return res.json();
+}
+
+export async function deleteTeacherWorkflowTask(workflowId: string, taskId: string): Promise<void> {
+  const res = await fetch(`/api/v1/teacher/workflows/${workflowId}/tasks/${taskId}`, {
+    method: "DELETE",
+    headers: getHeaders(),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to delete task: ${res.statusText}`);
+  }
+}
+
 
 
 

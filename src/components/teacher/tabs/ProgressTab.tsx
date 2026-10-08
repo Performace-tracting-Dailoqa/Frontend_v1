@@ -178,7 +178,7 @@ export default function ProgressTab({ onNavigateTab }: ProgressTabProps) {
         <div>
           <div className="flex items-center gap-2 text-[#4B2EF5] font-semibold text-xs mb-1">
             <span className="material-symbols-outlined text-base">insights</span>
-            <span>LEARNING PROGRESS &amp; PERFORMANCE DASHBOARD</span>
+            <span>PROGRESS &amp; PERFORMANCE DASHBOARD</span>
           </div>
           <h2 className="text-xl font-headline font-bold text-on-surface">Comprehensive Learning Analytics</h2>
           <p className="text-xs text-on-surface-variant mt-0.5">

@@ -9,6 +9,7 @@ import { TeacherStudent } from "@/services/teacherService";
 
 import DashboardTab from "@/components/teacher/tabs/DashboardTab";
 import LearnersTab from "@/components/teacher/tabs/LearnersTab";
+import WorkflowsTab from "@/components/teacher/tabs/WorkflowsTab";
 import ProgressTab from "@/components/teacher/tabs/ProgressTab";
 import FeedbackTab from "@/components/teacher/tabs/FeedbackTab";
 import EvaluationsTab from "@/components/teacher/tabs/EvaluationsTab";
@@ -96,6 +97,15 @@ function TeacherDashboardContent() {
               {activeTab === "attendance" && <AttendanceTab />}
               {activeTab === "learners" && (
                 <LearnersTab onSelectStudent={handleSelectStudentForEval} />
+              )}
+              {activeTab === "workflows" && (
+                <WorkflowsTab onNavigateToEvaluations={(studentId) => {
+                  if (studentId) {
+                    router.push(`/dashboard/teacher?tab=evaluations&student_id=${studentId}`);
+                  } else {
+                    router.push(`/dashboard/teacher?tab=evaluations`);
+                  }
+                }} />
               )}
               {activeTab === "progress" && <ProgressTab />}
               {activeTab === "feedback" && <FeedbackTab />}

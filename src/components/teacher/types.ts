@@ -1,1 +1,1 @@
-export type TeacherTab = "dashboard" | "attendance" | "learners" | "progress" | "feedback" | "evaluations" | "reports" | "history";
+export type TeacherTab = "dashboard" | "attendance" | "learners" | "workflows" | "progress" | "feedback" | "evaluations" | "reports" | "history";

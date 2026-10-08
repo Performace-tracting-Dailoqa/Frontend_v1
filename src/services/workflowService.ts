@@ -29,11 +29,13 @@ export interface WorkflowTask {
   description?: string | null;
   status: string;
   priority?: string | null;
+  start_date?: string | null;
   due_date?: string | null;
   submitted_at?: string | null;
   completed_at?: string | null;
   student_id: string;
   assigned_by_manager_id: string;
+  assigned_by_name?: string | null;
   student_grade?: number | null;
   student_metric_grades?: MetricGradeItem[] | null;
   manager_grade?: number | null;
@@ -302,6 +304,31 @@ export async function fetchManagerTeam(): Promise<TeamMember[]> {
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err?.detail?.message || err?.detail || `Failed to fetch team members (${res.status})`);
+  }
+  return await res.json();
+}
+
+export interface ManagerStudentDetails {
+  student: TeamMember;
+  stats: {
+    total_tasks: number;
+    completed_tasks: number;
+    in_progress_tasks: number;
+    pending_tasks: number;
+    completion_rate: number;
+  };
+  tasks: WorkflowTask[];
+}
+
+export async function fetchManagerStudentDetails(studentId: string): Promise<ManagerStudentDetails> {
+  const res = await fetch(`/api/v1/manager/students/${studentId}/details`, {
+    headers: getHeaders(),
+    credentials: "same-origin",
+    cache: "no-store",
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({}));
+    throw new Error(err?.detail?.message || err?.detail || `Failed to fetch student details (${res.status})`);
   }
   return await res.json();
 }

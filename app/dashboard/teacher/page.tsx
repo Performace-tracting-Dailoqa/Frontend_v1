@@ -10,7 +10,6 @@ import { TeacherStudent } from "@/services/teacherService";
 import DashboardTab from "@/components/teacher/tabs/DashboardTab";
 import LearnersTab from "@/components/teacher/tabs/LearnersTab";
 import ProgressTab from "@/components/teacher/tabs/ProgressTab";
-import JapaneseTab from "@/components/teacher/tabs/JapaneseTab";
 import FeedbackTab from "@/components/teacher/tabs/FeedbackTab";
 import EvaluationsTab from "@/components/teacher/tabs/EvaluationsTab";
 import ReportsTab from "@/components/teacher/tabs/ReportsTab";
@@ -99,7 +98,6 @@ function TeacherDashboardContent() {
                 <LearnersTab onSelectStudent={handleSelectStudentForEval} />
               )}
               {activeTab === "progress" && <ProgressTab />}
-              {activeTab === "japanese" && <JapaneseTab />}
               {activeTab === "feedback" && <FeedbackTab />}
               {activeTab === "evaluations" && (
                 <EvaluationsTab initialStudent={selectedStudentForEval} />

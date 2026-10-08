@@ -10,7 +10,6 @@ const tabs: { id: TeacherTab; label: string; icon: string }[] = [
   { id: "attendance", label: "Attendance Marking", icon: "how_to_reg" },
   { id: "learners", label: "My Learners", icon: "groups" },
   { id: "progress", label: "Learning Progress", icon: "trending_up" },
-  { id: "japanese", label: "Japanese", icon: "translate" },
   { id: "feedback", label: "Feedback", icon: "forum" },
   { id: "evaluations", label: "Evaluations", icon: "rate_review" },
   { id: "reports", label: "Reports", icon: "assessment" },

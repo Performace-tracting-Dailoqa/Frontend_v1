@@ -42,7 +42,6 @@ function getRoleNavSections(roleName?: string | null): { title?: string; items: 
           { label: "Dashboard", href: "/dashboard/teacher", icon: "dashboard" },
           { label: "My Learners", href: "/dashboard/teacher?tab=learners", icon: "groups" },
           { label: "Learning Progress", href: "/dashboard/teacher?tab=progress", icon: "analytics" },
-          { label: "Japanese Tracks", href: "/dashboard/teacher?tab=japanese", icon: "translate" },
           { label: "Feedback", href: "/dashboard/teacher?tab=feedback", icon: "forum" },
           { label: "Evaluations", href: "/dashboard/teacher?tab=evaluations", icon: "assignment" },
           { label: "Reports", href: "/dashboard/teacher?tab=reports", icon: "summarize" },

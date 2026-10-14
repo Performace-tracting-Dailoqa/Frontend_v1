@@ -179,11 +179,9 @@ export default function Sidebar({
         // which pins itself and lets the layout reserve the width instead.
         // The width the layout reserves is in DashboardLayout; the two must
         // agree (w-72 expanded, lg:w-20 collapsed).
-        className={`fixed top-0 bottom-0 left-0 z-50 ${
-          isCollapsed ? "w-72 lg:w-20" : "w-72"
-        } bg-white border-r border-slate-200/80 flex flex-col justify-between transition-all duration-300 lg:translate-x-0 ${
-          isOpen ? "translate-x-0" : "-translate-x-full"
-        }`}
+        className={`fixed top-0 bottom-0 left-0 z-50 ${isCollapsed ? "w-72 lg:w-20" : "w-72"
+          } bg-white border-r border-slate-200/80 flex flex-col justify-between transition-all duration-300 lg:translate-x-0 ${isOpen ? "translate-x-0" : "-translate-x-full"
+          }`}
       >
         {/* Top Header / Branding */}
         <div className={`p-4 pb-3 flex items-center ${isCollapsed ? "lg:justify-center lg:flex-col lg:gap-2" : "justify-between"} border-b border-slate-200/80`}>
@@ -195,7 +193,7 @@ export default function Sidebar({
               height={26}
               className="h-6 w-auto object-contain m-0 p-0"
             />
-            {!isCollapsed && (
+            {/* {!isCollapsed && (
               <div className="flex flex-col">
                 <span className="font-headline font-bold text-on-surface text-base tracking-tight leading-none">
                   Dailoqa
@@ -204,7 +202,7 @@ export default function Sidebar({
                   PMS Platform
                 </span>
               </div>
-            )}
+            )} */}
           </Link>
 
 
@@ -275,19 +273,16 @@ export default function Sidebar({
                     <Link
                       href={item.href}
                       onClick={onClose}
-                      className={`flex items-center ${
-                        isCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 px-3 py-2" : "justify-between px-3 py-2"
-                      } rounded-xl text-sm transition-all ${
-                        isActive
+                      className={`flex items-center ${isCollapsed ? "lg:justify-center lg:px-0 lg:py-2.5 px-3 py-2" : "justify-between px-3 py-2"
+                        } rounded-xl text-sm transition-all ${isActive
                           ? "bg-[#4B2EF5] text-white font-medium shadow-xs"
                           : "text-slate-600 hover:bg-slate-50 hover:text-slate-900 font-medium"
-                      }`}
+                        }`}
                     >
                       <div className={`flex items-center ${isCollapsed ? "lg:justify-center" : "gap-2.5"}`}>
                         <span
-                          className={`material-symbols-outlined text-xl ${
-                            isActive ? "text-white" : "text-slate-500 group-hover:text-primary"
-                          }`}
+                          className={`material-symbols-outlined text-xl ${isActive ? "text-white" : "text-slate-500 group-hover:text-primary"
+                            }`}
                         >
                           {item.icon}
                         </span>
@@ -296,11 +291,10 @@ export default function Sidebar({
 
                       {!isCollapsed && item.badge && (
                         <span
-                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${
-                            isActive
+                          className={`px-1.5 py-0.5 rounded-full text-[10px] font-bold ${isActive
                               ? "bg-white/20 text-white"
                               : "bg-[#e2dfff] text-[#3525cd]"
-                          }`}
+                            }`}
                         >
                           {item.badge}
                         </span>

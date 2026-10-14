@@ -68,20 +68,8 @@ function TeacherDashboardContent() {
                   </div>
 
                   <div className="flex flex-wrap items-center gap-3 z-10">
-                    <button
-                      onClick={() => handleNavigateTab("reports")}
-                      className="flex items-center gap-2 bg-surface-container px-4 py-2.5 rounded-xl text-body-md text-on-surface hover:bg-surface-container-high transition-all border border-outline-variant/50 font-medium cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-lg">download</span>
-                      <span>Export Reports</span>
-                    </button>
-                    <button
-                      onClick={() => handleNavigateTab("evaluations")}
-                      className="flex items-center gap-2 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white px-4 py-2.5 rounded-xl text-body-md font-medium transition-all shadow-sm cursor-pointer"
-                    >
-                      <span className="material-symbols-outlined text-lg">add</span>
-                      <span>New Evaluation</span>
-                    </button>
+
+
                   </div>
                 </div>
               )}

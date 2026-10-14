@@ -217,6 +217,14 @@ export async function addTeamMembers(teamId: string, studentIds: string[]): Prom
   );
 }
 
+export async function fetchTeamMembers(teamId: string): Promise<TeamMember[]> {
+  return apiJson<TeamMember[]>(
+    `/api/v1/manager/teams/${teamId}/members`,
+    {},
+    "Failed to fetch team members"
+  );
+}
+
 export async function fetchManagerTeam(): Promise<TeamMember[]> {
   return apiJson<TeamMember[]>("/api/v1/manager/team", {}, "Failed to fetch team members");
 }

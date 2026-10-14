@@ -250,8 +250,13 @@ export async function fetchBatchOptions(): Promise<BatchOption[]> {
  */
 export async function createBatch(payload: {
   name: string;
-  department?: string;
+  department?: string | null;
   status?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  manager_id?: string | null;
+  teacher_id?: string | null;
+  student_ids?: string[];
 }): Promise<BatchOption> {
   return apiJson<BatchOption>(
     "/api/v1/batches",

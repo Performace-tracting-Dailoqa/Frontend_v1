@@ -11,7 +11,7 @@ import {
   fetchBatchFullDetails,
 } from "@/services/batchService";
 import { fetchStudentReport, StudentReportData } from "@/services/adminService";
-import { TeamRecord } from "@/services/insightsService";
+import { fetchSuperuserTeams, TeamRecord } from "@/services/insightsService";
 import { shortDate } from "@/utils/date";
 import {
   Avatar,
@@ -29,11 +29,15 @@ import {
   StatusDot,
 } from "./SuperAdminUi";
 import InternEvaluationTrendChart from "./InternEvaluationTrendChart";
+import EditTeamModal from "./EditTeamModal";
+import ChangeStudentBatchModal, { StudentBatchTarget } from "./ChangeStudentBatchModal";
 
 interface BatchDetailPageProps {
   team: TeamRecord;
   onBack: () => void;
   onOpenAddPerson?: () => void;
+  allTeams?: TeamRecord[];
+  onTeamUpdated?: () => void;
 }
 
 function formatDate(value: string | null | undefined): string {
@@ -89,12 +93,31 @@ export default function BatchDetailPage({
   team,
   onBack,
   onOpenAddPerson,
+  allTeams,
+  onTeamUpdated,
 }: BatchDetailPageProps) {
   const [activeTab, setActiveTab] = useState<"workflows" | "tasks" | "students">("workflows");
   const [search, setSearch] = useState("");
   const [taskWorkflowFilter, setTaskWorkflowFilter] = useState("all");
   const [taskStatusFilter, setTaskStatusFilter] = useState("all");
   const [selectedTask, setSelectedTask] = useState<BatchTaskItem | null>(null);
+
+  // Modals for editing batch leads / details and changing a student's batch
+  const [showEditTeamModal, setShowEditTeamModal] = useState(false);
+  const [changingStudentBatch, setChangingStudentBatch] = useState<StudentBatchTarget | null>(null);
+  const [fallbackTeams, setFallbackTeams] = useState<TeamRecord[]>([]);
+
+  React.useEffect(() => {
+    if (!allTeams || allTeams.length === 0) {
+      fetchSuperuserTeams({ pageSize: 100 })
+        .then((res) => setFallbackTeams(res.items))
+        .catch(() => {});
+    }
+  }, [allTeams]);
+
+  const effectiveTeams = useMemo(() => {
+    return allTeams && allTeams.length > 0 ? allTeams : fallbackTeams;
+  }, [allTeams, fallbackTeams]);
 
   // Student Individual Full Progress Inspection state
   const [selectedStudentForReport, setSelectedStudentForReport] = useState<BatchStudentItem | null>(null);
@@ -146,6 +169,35 @@ export default function BatchDetailPage({
     overdue_tasks: team.tasks.overdue,
     completion_rate: team.tasks.completion_percentage,
   }, [data, team]);
+
+  const currentTeamRecord: TeamRecord = useMemo(() => {
+    return {
+      ...team,
+      name: data?.batch.name ?? team.name,
+      department: data?.batch.department ?? team.department,
+      status: data?.batch.status ?? team.status,
+      start_date: data?.batch.start_date ?? team.start_date,
+      end_date: data?.batch.end_date ?? team.end_date,
+      manager: data?.manager
+        ? {
+            profile_id: data.manager.id,
+            id: data.manager.id,
+            name: data.manager.name ?? null,
+            email: data.manager.email ?? null,
+          }
+        : team.manager,
+      teacher: data?.teacher
+        ? {
+            profile_id: data.teacher.id,
+            id: data.teacher.id,
+            name: data.teacher.name ?? null,
+            email: data.teacher.email ?? null,
+          }
+        : team.teacher,
+      student_count: data?.summary?.student_count ?? team.student_count,
+      workflow_count: data?.summary?.workflow_count ?? team.workflow_count,
+    };
+  }, [team, data]);
 
   // Filtered workflows
   const filteredWorkflows = useMemo(() => {
@@ -205,11 +257,22 @@ export default function BatchDetailPage({
       <PageIntro
         icon="arrow_back"
         title={data?.batch.name || team.name}
-        description={`Batch Hub · ${team.department ?? "General"} · ${
-          data?.manager?.name ? `Lead: ${data.manager.name}` : "Manager Lead Unassigned"
+        description={`Batch Hub · ${currentTeamRecord.department ?? "General"} · Manager: ${
+          data?.manager?.name || team.manager?.name || "Unassigned"
+        } · Teacher: ${
+          data?.teacher?.name || team.teacher?.name || "Unassigned"
         }`}
         action={
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setShowEditTeamModal(true)}
+              className="h-10 px-3.5 rounded-xl border border-[#4B2EF5]/30 bg-[#4B2EF5]/10 hover:bg-[#4B2EF5] text-[#4B2EF5] hover:text-white text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              title="Change manager lead, teacher lead, or details for this batch"
+            >
+              <span className="material-symbols-outlined text-base">manage_accounts</span>
+              <span>Change Leads</span>
+            </button>
             <button
               type="button"
               onClick={reload}
@@ -600,6 +663,26 @@ export default function BatchDetailPage({
                             <Pill tone={learner.is_active ? "emerald" : "rose"}>
                               {learner.is_active ? "Active" : "Inactive"}
                             </Pill>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setChangingStudentBatch({
+                                  id: learner.id,
+                                  name: learner.name,
+                                  email: learner.email,
+                                  enrollment_no: learner.enrollment_no,
+                                  department: learner.department,
+                                  current_batch_id: team.id,
+                                  current_batch_name: data?.batch.name || team.name,
+                                });
+                              }}
+                              className="h-8 px-3 rounded-xl border border-[#4B2EF5]/30 bg-[#4B2EF5]/5 hover:bg-[#4B2EF5] text-[#4B2EF5] hover:text-white text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                              title="Change batch assignment for this intern"
+                            >
+                              <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+                              <span>Change Batch</span>
+                            </button>
                             <span className="px-3 py-1.5 rounded-xl bg-slate-100 group-hover:bg-[#4B2EF5] group-hover:text-white text-slate-700 text-xs font-bold transition-all flex items-center gap-1 shadow-2xs">
                               <span>Full progress</span>
                               <span className="material-symbols-outlined text-sm">arrow_forward</span>
@@ -912,6 +995,27 @@ export default function BatchDetailPage({
                   </span>
                 </div>
                 <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (selectedStudentForReport) {
+                        setChangingStudentBatch({
+                          id: selectedStudentForReport.id,
+                          name: selectedStudentForReport.name,
+                          email: selectedStudentForReport.email,
+                          enrollment_no: selectedStudentForReport.enrollment_no,
+                          department: selectedStudentForReport.department,
+                          current_batch_id: team.id,
+                          current_batch_name: data?.batch.name || team.name,
+                        });
+                      }
+                    }}
+                    className="h-8 px-2.5 rounded-lg border border-[#4B2EF5]/30 bg-[#4B2EF5]/10 hover:bg-[#4B2EF5] text-[#4B2EF5] hover:text-white text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                    title="Transfer this student to another batch or unassign"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">swap_horiz</span>
+                    <span>Change Batch</span>
+                  </button>
                   <button
                     type="button"
                     onClick={() => void loadStudentReport(selectedStudentForReport.id)}
@@ -1438,7 +1542,35 @@ export default function BatchDetailPage({
                           {[
                             { label: "Department", value: selectedStudentForReport.department ?? "—" },
                             { label: "Enrollment No", value: selectedStudentForReport.enrollment_no ?? "—" },
-                            { label: "Batch", value: studentReport?.batch_name || team.name },
+                            {
+                              label: "Batch",
+                              value: (
+                                <span className="inline-flex items-center gap-2">
+                                  <span>{studentReport?.batch_name || team.name}</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      if (selectedStudentForReport) {
+                                        setChangingStudentBatch({
+                                          id: selectedStudentForReport.id,
+                                          name: selectedStudentForReport.name,
+                                          email: selectedStudentForReport.email,
+                                          enrollment_no: selectedStudentForReport.enrollment_no,
+                                          department: selectedStudentForReport.department,
+                                          current_batch_id: team.id,
+                                          current_batch_name: data?.batch.name || team.name,
+                                        });
+                                      }
+                                    }}
+                                    className="text-xs font-bold text-[#4B2EF5] hover:underline flex items-center gap-0.5 cursor-pointer ml-1"
+                                    title="Change batch assignment for this intern"
+                                  >
+                                    <span className="material-symbols-outlined text-[14px]">swap_horiz</span>
+                                    <span>Change</span>
+                                  </button>
+                                </span>
+                              ),
+                            },
                             { label: "Joining Date", value: formatDate(studentReport?.student?.joining_date || selectedStudentForReport.joining_date) },
                             { label: "Status", value: selectedStudentForReport.is_active ? "Active" : "Inactive" },
                             { label: "Student ID", value: selectedStudentForReport.id, mono: true },
@@ -1465,6 +1597,33 @@ export default function BatchDetailPage({
           </div>
         )}
       </AnimatePresence>
+
+      {/* Edit Team Leads & Metadata Modal */}
+      <EditTeamModal
+        isOpen={showEditTeamModal}
+        onClose={() => setShowEditTeamModal(false)}
+        team={currentTeamRecord}
+        onTeamUpdated={() => {
+          reload();
+          onTeamUpdated?.();
+        }}
+        existingTeams={effectiveTeams}
+      />
+
+      {/* Change Student Batch Assignment Modal */}
+      <ChangeStudentBatchModal
+        isOpen={Boolean(changingStudentBatch)}
+        onClose={() => setChangingStudentBatch(null)}
+        student={changingStudentBatch}
+        allTeams={effectiveTeams}
+        onBatchChanged={() => {
+          reload();
+          onTeamUpdated?.();
+          if (selectedStudentForReport) {
+            void loadStudentReport(selectedStudentForReport.id);
+          }
+        }}
+      />
     </motion.div>
   );
 }

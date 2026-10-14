@@ -5,7 +5,6 @@ import { LineChart } from "@mui/x-charts/LineChart";
 import { BarChart } from "@mui/x-charts/BarChart";
 import {
   fetchTeacherDashboardSummary,
-  createTeacherBatch,
   TeacherDashboardSummaryResponse,
   HistoryPoint,
 } from "@/services/teacherService";
@@ -33,18 +32,8 @@ export default function DashboardTab({ onNavigateTab }: DashboardTabProps) {
   const [selectedMonth, setSelectedMonth] = useState<string>("2026-09");
   const [selectedBatchForModal, setSelectedBatchForModal] = useState<string | null>(null);
   const [selectedStudentForAnalytics, setSelectedStudentForAnalytics] = useState<string | null>(null);
-
-  // Create Batch Modal State
-  const [showCreateBatchModal, setShowCreateBatchModal] = useState(false);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [batchForm, setBatchForm] = useState({
-    name: "",
-    course: "Japanese Language & Technical Training",
-    department: "Engineering",
-    start_date: "",
-    end_date: "",
-  });
   const [statusMessage, setStatusMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
 
   const loadDashboard = async () => {
     setIsLoading(true);
@@ -62,36 +51,6 @@ export default function DashboardTab({ onNavigateTab }: DashboardTabProps) {
     loadDashboard();
   }, []);
 
-  const handleCreateBatch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!batchForm.name.trim()) return;
-
-    setIsSubmitting(true);
-    setStatusMessage(null);
-    try {
-      await createTeacherBatch({
-        name: batchForm.name,
-        course: batchForm.course,
-        department: batchForm.department,
-        start_date: batchForm.start_date || undefined,
-        end_date: batchForm.end_date || undefined,
-      });
-      setStatusMessage({ type: "success", text: "Batch created successfully!" });
-      setShowCreateBatchModal(false);
-      setBatchForm({
-        name: "",
-        course: "Japanese Language & Technical Training",
-        department: "Engineering",
-        start_date: "",
-        end_date: "",
-      });
-      await loadDashboard();
-    } catch (err: any) {
-      setStatusMessage({ type: "error", text: err.message || "Failed to create batch" });
-    } finally {
-      setIsSubmitting(false);
-    }
-  };
 
   const summary = dashboardData?.summary || {
     total_batches: 0,
@@ -503,13 +462,6 @@ export default function DashboardTab({ onNavigateTab }: DashboardTabProps) {
             </p>
           </div>
 
-          <button
-            onClick={() => setShowCreateBatchModal(true)}
-            className="flex items-center gap-1.5 bg-[#4B2EF5] hover:bg-[#4B2EF5]/90 text-white px-3.5 py-2 rounded-xl text-xs font-semibold shadow-2xs transition-all cursor-pointer"
-          >
-            <span className="material-symbols-outlined text-base">add_circle</span>
-            <span>New Batch</span>
-          </button>
         </div>
 
         {isLoading ? (
@@ -521,13 +473,7 @@ export default function DashboardTab({ onNavigateTab }: DashboardTabProps) {
           <div className="p-12 text-center bg-surface-container-lowest rounded-2xl border border-dashed border-outline-variant/60">
             <span className="material-symbols-outlined text-4xl text-outline mb-2">school</span>
             <p className="text-sm font-semibold text-on-surface">No batches assigned yet</p>
-            <p className="text-xs text-on-surface-variant mt-1">Create a new batch or contact the administrator.</p>
-            <button
-              onClick={() => setShowCreateBatchModal(true)}
-              className="mt-4 px-4 py-2 bg-primary text-white rounded-xl text-xs font-semibold"
-            >
-              Create your first batch
-            </button>
+            <p className="text-xs text-on-surface-variant mt-1">Please contact your administrator to be assigned to a batch.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -608,99 +554,6 @@ export default function DashboardTab({ onNavigateTab }: DashboardTabProps) {
         />
       )}
 
-      {/* Create Batch Modal */}
-      {showCreateBatchModal && (
-        <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-xl border border-slate-200 animate-in fade-in zoom-in-95">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-4">
-              <h3 className="font-headline font-bold text-base text-slate-900 flex items-center gap-2">
-                <span className="material-symbols-outlined text-primary text-xl">add_box</span>
-                <span>Create New Cohort Batch</span>
-              </h3>
-              <button
-                onClick={() => setShowCreateBatchModal(false)}
-                className="text-slate-400 hover:text-slate-700 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-lg">close</span>
-              </button>
-            </div>
-
-            <form onSubmit={handleCreateBatch} className="space-y-4 text-xs">
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Batch Name *</label>
-                <input
-                  type="text"
-                  required
-                  value={batchForm.name}
-                  onChange={(e) => setBatchForm({ ...batchForm, name: e.target.value })}
-                  placeholder="e.g. 2026-Cohort-Tokyo"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Curriculum / Track</label>
-                <input
-                  type="text"
-                  value={batchForm.course}
-                  onChange={(e) => setBatchForm({ ...batchForm, course: e.target.value })}
-                  placeholder="e.g. Japanese Language & Technical Training"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div>
-                <label className="block font-semibold text-slate-700 mb-1">Department</label>
-                <input
-                  type="text"
-                  value={batchForm.department}
-                  onChange={(e) => setBatchForm({ ...batchForm, department: e.target.value })}
-                  placeholder="e.g. Engineering"
-                  className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">Start Date</label>
-                  <input
-                    type="date"
-                    value={batchForm.start_date}
-                    onChange={(e) => setBatchForm({ ...batchForm, start_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-                <div>
-                  <label className="block font-semibold text-slate-700 mb-1">End Date</label>
-                  <input
-                    type="date"
-                    value={batchForm.end_date}
-                    onChange={(e) => setBatchForm({ ...batchForm, end_date: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-primary/20"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
-                <button
-                  type="button"
-                  onClick={() => setShowCreateBatchModal(false)}
-                  className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold cursor-pointer"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSubmitting}
-                  className="px-4 py-2 rounded-xl bg-primary hover:bg-primary/90 text-white font-semibold shadow-2xs cursor-pointer disabled:opacity-50"
-                >
-                  {isSubmitting ? "Creating..." : "Save Batch"}
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

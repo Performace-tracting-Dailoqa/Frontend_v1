@@ -30,6 +30,9 @@ import {
   UnavailableState,
 } from "../SuperAdminUi";
 import BatchDetailPage from "../BatchDetailPage";
+import CreateTeamModal from "../CreateTeamModal";
+import EditTeamModal from "../EditTeamModal";
+import ChangeStudentBatchModal, { StudentBatchTarget } from "../ChangeStudentBatchModal";
 
 interface TeamsTabProps {
   onOpenAddPerson: () => void;
@@ -90,7 +93,17 @@ function paginationItems(current: number, total: number, span = 1): Array<number
  * resolves differently in Node and the browser, which shows up as a hydration
  * mismatch.
  */
-function BatchLearnersPage({ team, onBack }: { team: TeamRecord; onBack: () => void }) {
+function BatchLearnersPage({
+  team,
+  onBack,
+  allTeams,
+  onChangeBatch,
+}: {
+  team: TeamRecord;
+  onBack: () => void;
+  allTeams?: TeamRecord[];
+  onChangeBatch?: (learner: BatchLearner) => void;
+}) {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
 
@@ -253,6 +266,17 @@ function BatchLearnersPage({ team, onBack }: { team: TeamRecord; onBack: () => v
                     <Pill tone="slate">Joined {shortDate(learner.joining_date)}</Pill>
                   )}
                   <Pill tone={learnerTone(learner)}>{learnerStatusLabel(learner)}</Pill>
+                  {onChangeBatch && (
+                    <button
+                      type="button"
+                      onClick={() => onChangeBatch(learner)}
+                      className="h-7 px-2.5 rounded-lg border border-[#4B2EF5]/30 bg-[#4B2EF5]/5 hover:bg-[#4B2EF5] text-[#4B2EF5] hover:text-white text-[11px] font-semibold flex items-center gap-1 transition-colors cursor-pointer shadow-2xs"
+                      title="Change batch assignment for this intern"
+                    >
+                      <span className="material-symbols-outlined text-[13px]">swap_horiz</span>
+                      <span>Change Batch</span>
+                    </button>
+                  )}
                 </div>
               </div>
             ))}
@@ -340,10 +364,14 @@ function TeamsTabContent({
   data,
   onOpenAddPerson,
   onOpenBatchDetail,
+  onCreateTeam,
+  onEditTeam,
 }: {
   data: SuperuserTeamList;
   onOpenAddPerson: () => void;
   onOpenBatchDetail: (team: TeamRecord) => void;
+  onCreateTeam: () => void;
+  onEditTeam: (team: TeamRecord) => void;
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(data.items[0]?.id ?? null);
 
@@ -357,7 +385,12 @@ function TeamsTabContent({
           <EmptyState
             icon="groups"
             title="No teams match your filters"
-            description="Adjust the search or status filter, or create the first batch from the Teams module."
+            description="Adjust the search or status filter, or create a new team."
+            action={
+              <PrimaryButton onClick={onCreateTeam} icon="group_add">
+                Create Team
+              </PrimaryButton>
+            }
           />
         ) : (
           data.items.map((team) => {
@@ -428,16 +461,35 @@ function TeamsTabContent({
                     <span className="material-symbols-outlined text-[14px]">badge</span>
                     {team.manager?.name ?? "No manager"}
                   </span>
-                  <span
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onOpenBatchDetail(team);
-                    }}
-                    className="ml-auto text-[11px] font-bold text-[#4B2EF5] hover:underline flex items-center gap-0.5 cursor-pointer"
-                  >
-                    <span>Workflows & tasks</span>
-                    <span className="material-symbols-outlined text-xs">arrow_forward</span>
-                  </span>
+                  {team.teacher?.name && (
+                    <span className="flex items-center gap-1">
+                      <span className="material-symbols-outlined text-[14px]">school</span>
+                      {team.teacher.name}
+                    </span>
+                  )}
+                  <div className="ml-auto flex items-center gap-3">
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onEditTeam(team);
+                      }}
+                      className="text-[11px] font-bold text-slate-600 hover:text-[#4B2EF5] flex items-center gap-0.5 cursor-pointer"
+                      title="Change manager, teacher or details for this team"
+                    >
+                      <span className="material-symbols-outlined text-xs">manage_accounts</span>
+                      <span>Change Leads</span>
+                    </span>
+                    <span
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onOpenBatchDetail(team);
+                      }}
+                      className="text-[11px] font-bold text-[#4B2EF5] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <span>Workflows & tasks</span>
+                      <span className="material-symbols-outlined text-xs">arrow_forward</span>
+                    </span>
+                  </div>
                 </div>
               </motion.button>
             );
@@ -549,9 +601,20 @@ function TeamsTabContent({
                   </div>
 
                   <div>
-                    <p className="text-xs font-bold text-slate-700 uppercase tracking-wider mb-2">
-                      Team leads
-                    </p>
+                    <div className="flex items-center justify-between mb-2">
+                      <p className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        Team leads
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => onEditTeam(selected)}
+                        className="text-xs font-bold text-[#4B2EF5] hover:text-[#3B22C8] flex items-center gap-1 cursor-pointer hover:underline"
+                        title="Change batch manager or teacher"
+                      >
+                        <span className="material-symbols-outlined text-[15px]">manage_accounts</span>
+                        <span>Change Leads</span>
+                      </button>
+                    </div>
                     <div className="space-y-2">
                       {[
                         { role: "Manager", person: selected.manager },
@@ -559,7 +622,7 @@ function TeamsTabContent({
                       ].map(({ role, person }) => (
                         <div
                           key={role}
-                          className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200/80"
+                          className="flex items-center gap-3 p-2.5 rounded-xl border border-slate-200/80 bg-white"
                         >
                           {person?.name ? (
                             <Avatar name={person.name} size="sm" />
@@ -577,18 +640,41 @@ function TeamsTabContent({
                               <p className="text-[11px] text-slate-400 font-mono truncate">{person.email}</p>
                             )}
                           </div>
+                          <button
+                            type="button"
+                            onClick={() => onEditTeam(selected)}
+                            className="text-xs font-semibold text-[#4B2EF5] hover:bg-[#4B2EF5]/10 px-2 py-1 rounded-lg transition-colors cursor-pointer shrink-0"
+                          >
+                            Change
+                          </button>
                         </div>
                       ))}
                     </div>
                   </div>
 
-                  <div className="pt-3 border-t border-slate-100">
+                  <div className="pt-3 border-t border-slate-100 space-y-2">
                     <p className="text-[11px] text-slate-500 mb-2">
-                      Teams are created from the batch module. To staff a team, add the people first.
+                      Manage team staffing and leadership directly, or enroll new members.
                     </p>
-                    <PrimaryButton onClick={onOpenAddPerson} icon="person_add" className="w-full justify-center">
-                      Add a team member
+                    <button
+                      type="button"
+                      onClick={() => onEditTeam(selected)}
+                      className="w-full h-10 px-4 rounded-xl border border-[#4B2EF5]/30 bg-[#4B2EF5]/5 hover:bg-[#4B2EF5]/15 text-[#4B2EF5] text-xs font-bold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-base">manage_accounts</span>
+                      <span>Change Teacher / Manager / Details</span>
+                    </button>
+                    <PrimaryButton onClick={onCreateTeam} icon="group_add" className="w-full justify-center">
+                      Create a new team
                     </PrimaryButton>
+                    <button
+                      type="button"
+                      onClick={onOpenAddPerson}
+                      className="w-full h-10 px-4 rounded-xl border border-slate-200/90 bg-white hover:bg-slate-50 text-slate-700 text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
+                    >
+                      <span className="material-symbols-outlined text-base text-slate-500">person_add</span>
+                      <span>Add a team member</span>
+                    </button>
                   </div>
                 </div>
               </SectionCard>
@@ -616,6 +702,9 @@ function TeamsTabContent({
 export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("all");
+  const [showCreateTeamModal, setShowCreateTeamModal] = useState(false);
+  const [editingTeam, setEditingTeam] = useState<TeamRecord | null>(null);
+  const [changingStudentBatch, setChangingStudentBatch] = useState<StudentBatchTarget | null>(null);
 
   /**
    * The batch whose full detail view (workflows, tasks, evaluations, students) is open.
@@ -640,8 +729,13 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
     return (
       <BatchDetailPage
         team={detailBatch}
-        onBack={() => setDetailBatch(null)}
+        onBack={() => {
+          setDetailBatch(null);
+          reload();
+        }}
         onOpenAddPerson={onOpenAddPerson}
+        allTeams={data?.items || []}
+        onTeamUpdated={() => reload()}
       />
     );
   }
@@ -668,6 +762,8 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
         data={data}
         onOpenAddPerson={onOpenAddPerson}
         onOpenBatchDetail={setDetailBatch}
+        onCreateTeam={() => setShowCreateTeamModal(true)}
+        onEditTeam={setEditingTeam}
       />
     );
   };
@@ -700,6 +796,13 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
                 { value: "active", label: "Active only" },
               ]}
             />
+            <PrimaryButton
+              icon="group_add"
+              onClick={() => setShowCreateTeamModal(true)}
+              className="h-10 px-4"
+            >
+              Create Team
+            </PrimaryButton>
             {isLoading && (
               <span className="w-4 h-4 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             )}
@@ -745,6 +848,31 @@ export default function TeamsTab({ onOpenAddPerson }: TeamsTabProps) {
       )}
 
       {body()}
+
+      <CreateTeamModal
+        isOpen={showCreateTeamModal}
+        onClose={() => setShowCreateTeamModal(false)}
+        onTeamCreated={() => {
+          reload();
+        }}
+        existingTeams={data?.items || []}
+      />
+
+      <EditTeamModal
+        isOpen={Boolean(editingTeam)}
+        onClose={() => setEditingTeam(null)}
+        team={editingTeam}
+        onTeamUpdated={() => reload()}
+        existingTeams={data?.items || []}
+      />
+
+      <ChangeStudentBatchModal
+        isOpen={Boolean(changingStudentBatch)}
+        onClose={() => setChangingStudentBatch(null)}
+        student={changingStudentBatch}
+        allTeams={data?.items || []}
+        onBatchChanged={() => reload()}
+      />
     </motion.div>
   );
 }

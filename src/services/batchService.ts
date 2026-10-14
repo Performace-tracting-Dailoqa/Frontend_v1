@@ -219,3 +219,68 @@ export async function fetchBatchFullDetails(batchId: string): Promise<BatchFullD
   );
 }
 
+export interface CreateBatchPayload {
+  name: string;
+  department?: string | null;
+  status?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  manager_id?: string | null;
+  teacher_id?: string | null;
+  student_ids?: string[];
+}
+
+export interface CreatedBatchResponse {
+  id: string;
+  name: string;
+  department?: string | null;
+  status?: string | null;
+  manager_id?: string | null;
+  teacher_id?: string | null;
+}
+
+export async function createBatch(payload: CreateBatchPayload): Promise<CreatedBatchResponse> {
+  return apiJson<CreatedBatchResponse>(
+    "/api/v1/batches",
+    { method: "POST", body: JSON.stringify(payload) },
+    "Could not create team"
+  );
+}
+
+export interface UpdateBatchPayload {
+  name?: string;
+  department?: string | null;
+  status?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  manager_id?: string | null;
+  teacher_id?: string | null;
+  student_ids?: string[];
+}
+
+export async function updateBatch(
+  batchId: string,
+  payload: UpdateBatchPayload
+): Promise<CreatedBatchResponse> {
+  return apiJson<CreatedBatchResponse>(
+    `/api/v1/batches/${batchId}`,
+    { method: "PATCH", body: JSON.stringify(payload) },
+    "Could not update team"
+  );
+}
+
+export async function changeStudentBatch(
+  studentProfileId: string,
+  batchId: string | null
+): Promise<void> {
+  await apiJson<void>(
+    `/api/v1/students/${studentProfileId}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({ batch_id: batchId }),
+    },
+    "Could not update student batch assignment"
+  );
+}
+
+
